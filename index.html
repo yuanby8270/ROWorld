@@ -1,22 +1,3 @@
-<div id="squadModal" class="..."> 
-   </div> ```
-
-但是 `app.js` 執行時，會拼命去找這些 ID：
-1.  `squadModalTitle` (設定標題用)
-2.  `squadName`
-3.  `squadNote`
-
-因為您的 HTML 裡**沒有這些元素**（它們被省略了），所以程式碼一執行到 `switchTab` 想要設定標題時，就**崩潰了** (Error: `Cannot set properties of null`)。程式崩潰後，後面的「讀取成員資料」就再也不會執行，所以顯示為 0。
-
----
-
-### 🛠️ 最終修復：補上缺失的 Modal 內容
-
-請**完整複製**下面的 `index.html` 程式碼。這份程式碼已經把之前省略的 `editModal`、`squadModal`、`activityModal` 內容**全部補齊**了。
-
-**請直接覆蓋 GitHub 上的 `index.html` 檔案，問題就會解決。**
-
-```html
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
