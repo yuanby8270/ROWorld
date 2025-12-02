@@ -282,7 +282,7 @@
     <div class="bg-clouds"></div>
 
     <header class="sticky top-0 z-50 w-full shadow-md">
-        <nav class="bg-white/90 backdrop-blur border-b border-white/50 px-4 py-3 flex justify-between items-center safe-area-top">
+        <nav class="bg-white/90 backdrop-blur border-b border-white/50 px-4 py-3 flex justify-between items-center safe-area-top w-full"> 
             <div class="flex items-center space-x-3 cursor-pointer" onclick="app.switchTab('home')">
                 <div class="w-9 h-9 bg-gradient-to-br from-blue-400 to-cyan-400 rounded-xl flex items-center justify-center text-white font-bold text-lg shadow-md shadow-blue-200 border border-white font-cute">
                     RO
@@ -308,7 +308,7 @@
         </nav>
 
         <div class="bg-white/30 backdrop-blur border-b border-white/40 z-40" id="nav-container">
-            <div class="container mx-auto px-4 py-2 flex space-x-2 overflow-x-auto scroll-hide">
+            <div class="px-4 py-2 flex space-x-2 overflow-x-auto scroll-hide w-full"> 
                 <button onclick="app.switchTab('home')" id="tab-home" class="nav-pill"><i class="fas fa-home mr-1"></i> 首頁</button>
                 <button onclick="app.switchTab('members')" id="tab-members" class="nav-pill"><i class="fas fa-users mr-1"></i> 名冊</button>
                 <button onclick="app.switchTab('gvg')" id="tab-gvg" class="nav-pill"><i class="fas fa-shield-alt mr-1"></i> GVG</button>
