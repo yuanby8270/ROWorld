@@ -43,7 +43,7 @@ tailwind.config = {
 
 
 // ** 2. 常量與初始數據 **
-const DATA_VERSION = "6.2"; // 更新版本號：時間排序版
+const DATA_VERSION = "6.4"; // 更新版本：職位權限鎖定版
 const JOB_STYLES = [
     { key: ['騎士'], class: 'bg-job-knight', icon: 'fa-shield-alt' }, { key: ['十字軍'], class: 'bg-job-crusader', icon: 'fa-cross' }, { key: ['鐵匠', '商人'], class: 'bg-job-blacksmith', icon: 'fa-hammer' },
     { key: ['獵人', '弓箭手'], class: 'bg-job-hunter', icon: 'fa-crosshairs' }, { key: ['詩人'], class: 'bg-job-bard', icon: 'fa-music' }, { key: ['煉金'], class: 'bg-job-alchemist', icon: 'fa-flask' },
@@ -60,8 +60,7 @@ const JOB_STRUCTURE = {
     "槍手": ["一般", "其他"], "初心者": ["超級初心者", "其他"]
 };
 
-// 初始名單 (純數據，無 ID)
-// 這裡保留您原始的 73 位成員，移除了所有 "空位" 數據，因為現在會自動排序
+// 初始名單
 const SEED_DATA = [
     { lineName: "poppy🐶", gameName: "YT清燉小羔羊", mainClass: "神官(讚美)", role: "輔助", rank: "會長", intro: "公會唯一清流 出淤泥而不染" },
     { lineName: "#Yuan", gameName: "沐沐", mainClass: "神官(讚美)", role: "輔助", rank: "資料管理員", intro: "" },
@@ -101,7 +100,7 @@ const SEED_DATA = [
     { lineName: "Ryan", gameName: "水鏡是條狗", mainClass: "", role: "待定", rank: "成員", intro: "" },
     { lineName: "兩廣寬", gameName: "新竹房仲兩廣", mainClass: "賢者", role: "輔助", rank: "成員", intro: "" },
     { lineName: "富邦-Shawn(小逸)", gameName: "HsuBoBo", mainClass: "刺客(敏爆)", role: "輸出", rank: "成員", intro: "" },
-    { lineName: "成成", gameName: "該獵戶已夜梟", mainClass: "獵人(鳥)", role: "待定", rank: "成員", intro: "待領養孤兒" },
+    { lineName: "成成", gameName: "該獵戶已夜梟", mainClass: "獵人(鳥)", role: "待定", rank: "成員", intro: "" },
     { lineName: "魏駿翔", gameName: "歐洲獨角獸", mainClass: "流氓(輸出)", role: "待定", rank: "成員", intro: "" },
     { lineName: "Louie", gameName: "水蜜桃王", mainClass: "獵人(鳥)", role: "輸出", rank: "成員", intro: "櫻花表弟" },
     { lineName: "Keith-匠屋空間工作室", gameName: "潘朵拉企鵝", mainClass: "流氓(脫裝)", role: "輸出", rank: "成員", intro: "待領養孤兒, 我喜歡大叔" },
@@ -193,17 +192,20 @@ const App = {
         this.switchTab('home'); 
     },
     
-    // ** 優化：改用 createdAt (新增時間) 進行排序 **
+    // ** 排序：依新增時間排序，舊的在先，新的在後 **
     sortMembers: function(membersArray) {
         return membersArray.sort((a, b) => {
-            // 處理時間戳記 (Firebase Timestamp 或數字)
-            const timeA = a.createdAt ? (a.createdAt.seconds ? a.createdAt.seconds * 1000 : a.createdAt) : 0;
-            const timeB = b.createdAt ? (b.createdAt.seconds ? b.createdAt.seconds * 1000 : b.createdAt) : 0;
+            const getTime = (m) => {
+                if (m.createdAt === null) return Date.now(); 
+                if (typeof m.createdAt === 'object' && m.createdAt.seconds) return m.createdAt.seconds * 1000;
+                return m.createdAt || 0; 
+            };
+
+            const timeA = getTime(a);
+            const timeB = getTime(b);
             
-            // 升序排列 (最舊的在前，新的在後) -> 1, 2, 3...
             if (timeA !== timeB) return timeA - timeB;
             
-            // 如果時間相同 (例如種子數據)，則用名稱排序作為備案
             const nameA = a.gameName || '';
             const nameB = b.gameName || '';
             return nameA.localeCompare(nameB);
@@ -254,7 +256,6 @@ const App = {
 
             if (currentVer !== APP_VER) {
                 this.members = JSON.parse(JSON.stringify(SEED_DATA));
-                // Demo 模式也要補上模擬的時間戳記，以便排序
                 this.members = this.members.map((m, i) => ({...m, createdAt: Date.now() + i}));
                 
                 if (storedGrp) { try { this.groups = JSON.parse(storedGrp); } catch(e) { this.groups = []; } } 
@@ -279,20 +280,19 @@ const App = {
     },
 
     // =======================================================
-    // ** 【重要】App.seedFirebaseMembers 函式 **
-    // 1. 使用 doc() 確保隨機 ID
-    // 2. 寫入 createdAt 時間戳記，確保初始順序正確
+    // ** App.seedFirebaseMembers 函式 **
+    // 寫入種子數據，並加上時間戳記
     // =======================================================
     seedFirebaseMembers: async function() {
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'row-guild-app';
         const batch = this.db.batch();
-        const now = Date.now(); // 基準時間
+        const now = Date.now(); 
         
         SEED_DATA.forEach((item, index) => { 
             const ref = this.db.collection('artifacts').doc(appId).collection('public').doc('data').collection(this.collectionMembers).doc(); 
             const { id, ...data } = item;
             
-            // 加入時間戳記：每一筆都加 10ms，確保在資料庫中也是這個順序
+            // 每一筆加 10ms，確保排序正確 (#01, #02...)
             data.createdAt = new Date(now + index * 10); 
             
             batch.set(ref, data); 
@@ -312,7 +312,7 @@ const App = {
         }
     },
     
-    // ... (loadHistory, logChange, showHistoryModal, openLoginModal, handleLogin, updateAdminUI, switchTab, handleMainAction 保持不變，省略以節省篇幅，但請確保完整貼上之前的版本) ...
+    // ... (Log functions omitted for brevity, but needed) ...
     loadHistory: function() {
         if (this.mode === 'demo') {
             const storedHistory = localStorage.getItem('row_mod_history');
@@ -331,7 +331,7 @@ const App = {
         list.innerHTML = this.history.map(log => {
             const date = new Date(log.timestamp).toLocaleString('zh-TW', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
             const color = log.action.includes('DELETE') || log.action.includes('解散') ? 'text-red-600' : 'text-blue-600';
-            return `<div class="p-3 bg-slate-50 border border-slate-200 rounded-lg"><div class="flex justify-between items-center text-xs text-slate-500 font-mono mb-1"><span>${date}</span><span class="${color} font-bold">${log.action}</span></div><p class="text-sm text-slate-800">${log.details}</p><span class="text-[10px] text-slate-400">by ${log.user}</span></div>`;
+            return `<div class="p-3 bg-slate-50 border border-slate-200 rounded-lg"><div class="flex justify-between items-center text-xs text-slate-500 font-mono mb-1"><span>${date}</span><span class="${color} font-bold">${log.action}</span></div><p class="text-sm text-slate-800">${log.details}</p><span class="text-[10px] text-slate-400">by ${log.user} (ID: ${log.targetId})</span></div>`;
         }).join('') || '<p class="text-center text-slate-400 mt-4">尚無修改紀錄。</p>';
         this.showModal('historyModal');
     },
@@ -397,23 +397,16 @@ const App = {
         } catch(e) { console.error(e); alert("儲存失敗"); }
     },
 
-    // =======================================================
-    // ** 【修復項目】App.addMember 函式 **
-    // 新增成員時，自動加上伺服器時間戳記 (serverTimestamp)
-    // =======================================================
     addMember: async function(member) {
         if (this.mode === 'firebase') { 
             const appId = typeof __app_id !== 'undefined' ? __app_id : 'row-guild-app'; 
-            // 加上 createdAt 時間戳記
-            const newDoc = {
-                ...member,
-                createdAt: firebase.firestore.FieldValue.serverTimestamp() 
-            };
+            // ** 重要：新增時加上伺服器時間，保證排在最後面 **
+            const newDoc = { ...member, createdAt: firebase.firestore.FieldValue.serverTimestamp() };
             await this.db.collection('artifacts').doc(appId).collection('public').doc('data').collection(this.collectionMembers).add(newDoc); 
         } 
         else { 
             member.id = 'm_' + Date.now(); 
-            member.createdAt = Date.now(); // Demo 模式時間
+            member.createdAt = Date.now(); 
             this.members.push(member); 
             this.members = this.sortMembers(this.members); 
             this.saveLocal(); 
@@ -427,7 +420,7 @@ const App = {
             try { await docRef.update(member); } 
             catch (error) {
                 if (error.code === 'not-found' || error.message.includes('No document')) {
-                     // 如果找不到文件，改為 set，並補上時間戳記
+                     // 備援：如果找不到文件，重新建立，並使用當下時間 (排到最後)
                      await docRef.set({ ...member, createdAt: firebase.firestore.FieldValue.serverTimestamp() }); 
                 } else { throw error; }
             }
@@ -462,7 +455,6 @@ const App = {
         } catch(e) { console.error(e); alert("刪除失敗"); }
     },
 
-    // ... (saveSquad, deleteSquad, toggleMemberStatus, render 保持不變，請確保包含) ...
     saveSquad: async function() {
         if (!['master', 'admin', 'commander'].includes(this.userRole)) { alert("權限不足"); return; }
         const id = document.getElementById('squadId').value;
@@ -528,9 +520,9 @@ const App = {
     },
 
     // =======================================================
-    // ** 【最終修復】App.createCardHTML 函式 **
-    // 依據「排序後的順序」自動產生序號 (#01, #02...)
-    // 這樣刪除中間的人，後面的人會自動遞補號碼
+    // ** 【重要】App.createCardHTML 函式 **
+    // 動態顯示序號：#01, #02... 
+    // 當中間有人被刪除，後面的號碼會自動遞補
     // =======================================================
     createCardHTML: function(item, idx) {
         const jobName = item.mainClass || '';
@@ -547,10 +539,8 @@ const App = {
             return `<span class="${color} text-[10px] px-1.5 rounded border truncate inline-block max-w-[80px]">${s.name}</span>`;
         }).join('');
         
-        // --- 動態序號邏輯：使用列表 index + 1 ---
-        // 解決「取消星星符」並「依照新增順序排列」且「刪除後自動遞補」的需求
+        // ** 動態序號：基於排序後的 index + 1 **
         const displayNo = `#${(idx + 1).toString().padStart(2, '0')}`;
-        // -------------------------
 
         const getRoleBadge = (r) => {
             if (r.includes('輸出')) return `<span class="tag tag-dps">${r}</span>`;
@@ -591,64 +581,26 @@ const App = {
             </div>
         `;
     },
-    
-    // ... (renderSquads, copyText, copySquadList, openAddModal, openEditModal, updateBaseJobSelect, updateSubJobSelect, toggleJobInputMode, openSquadModal, toggleSquadMember, renderSquadMemberSelect, showModal, closeModal, setupListeners, setFilter, setJobFilter, exportCSV, downloadSelf, saveConfig, resetToDemo) ...
-    // 注意：為了篇幅，這裡省略了重複的 UI 邏輯函式，請您務必保留上面程式碼區塊中這些函式的定義。
-    // 如果您直接複製我上一個回答的完整代碼，那些函式都已經在裡面了。
-    // 在這裡我補上 openAddModal 等關鍵 UI 函式確保複製完整性：
-    
-    renderSquads: function() {
-        const type = this.currentTab === 'gvg' ? 'gvg' : 'misc';
-        const search = document.getElementById('groupSearchInput').value.toLowerCase();
-        let canEdit = ['master', 'admin', 'commander'].includes(this.userRole);
-        document.getElementById('adminWarning')?.classList.toggle('hidden', !(!canEdit && type === 'gvg'));
+    // =======================================================
 
-        let visibleGroups = this.groups.filter(g => (g.type || 'gvg') === type);
-        if (search) {
-            visibleGroups = visibleGroups.filter(g => {
-                if (g.name.toLowerCase().includes(search)) return true;
-                return g.members.some(m => {
-                    const id = typeof m === 'string' ? m : m.id;
-                    const mem = this.members.find(x => x.id === id);
-                    return mem && (mem.gameName.toLowerCase().includes(search) || mem.mainClass.toLowerCase().includes(search));
-                });
-            });
-        }
-
-        const grid = document.getElementById('squadGrid');
-        if (visibleGroups.length === 0) { grid.innerHTML = ''; document.getElementById('noSquadsMsg').classList.remove('hidden'); return; }
-        document.getElementById('noSquadsMsg').classList.add('hidden');
-
-        grid.innerHTML = visibleGroups.map(group => {
-            const list = (group.members || []).map(m => {
-                const id = typeof m === 'string' ? m : m.id;
-                const status = typeof m === 'string' ? 'pending' : (m.status || 'pending');
-                const mem = this.members.find(x => x.id === id);
-                if(!mem) return '';
-                const roleClass = mem.role.includes('輸出')?'role-badge-dps':mem.role.includes('坦')?'role-badge-tank':mem.role.includes('輔助')?'role-badge-sup':'role-badge-pending';
-                const statusIcon = status==='confirmed'?'<i class="fas fa-check-circle status-confirmed"></i>':'<i class="fas fa-circle-xmark status-pending"></i>';
-                return `<div class="flex items-center justify-between text-sm py-2 border-b border-slate-200 last:border-0 hover:bg-slate-50 px-3 transition"><div class="flex items-center gap-2 min-w-0"><span class="${roleClass} text-xs">${mem.role}</span><span class="text-slate-800 font-bold truncate">${mem.gameName}</span></div><div class="flex items-center gap-3"><span class="text-xs text-slate-500 font-mono">${mem.mainClass.replace(/\(.*\)/,'')}</span>${type==='gvg'?`<div class="text-lg cursor-pointer hover:scale-110 transition" onclick="event.stopPropagation(); app.toggleMemberStatus('${group.id}', '${mem.id}')">${statusIcon}</div>`:''}</div></div>`;
-            }).join('');
-            const confirmedCount = (group.members||[]).filter(m => (typeof m !== 'string' && m.status === 'confirmed')).length;
-            const statusText = type === 'gvg' ? `<div class="font-bold text-sm ${confirmedCount===5?'text-green-600':'text-red-500'}">戰鬥成員: ${confirmedCount}/5</div>` : `<div class="text-[10px] text-slate-400">成員: ${group.members.length}</div>`;
-            const editBtn = canEdit ? `<button onclick="app.openSquadModal('${group.id}')" class="text-slate-400 hover:text-blue-600 p-1"><i class="fas fa-cog"></i></button>` : '';
-            return `<div class="${type==='gvg'?'squad-card-gvg':'bg-white rounded-xl shadow-sm border border-blue-100'} flex flex-col h-full overflow-hidden"><div class="${type==='gvg'?'header squad-card-gvg-header':'bg-blue-50 p-4 border-b border-blue-100'} p-4 flex justify-between items-center rounded-t-[7px]"><div><h3 class="text-xl font-bold">${group.name}</h3><p class="text-xs mt-1 italic opacity-80">${group.note||''}</p></div><div class="flex items-center"><button onclick="app.copySquadList('${group.id}')" class="text-slate-400 hover:text-green-600 p-1 ml-2"><i class="fas fa-copy"></i></button>${editBtn}</div></div><div class="flex-grow p-1 overflow-y-auto max-h-80">${list}</div><div class="bg-white p-3 border-t border-slate-100 flex justify-end items-center shrink-0">${statusText}</div></div>`;
-        }).join('');
-    },
-
-    copyText: function(el, text) { navigator.clipboard.writeText(text).then(() => { el.classList.add('copied'); setTimeout(() => el.classList.remove('copied'), 1500); }); },
-    copySquadList: function(groupId) {
-        const group = this.groups.find(g => g.id === (groupId || document.getElementById('squadId').value)); if(!group) return;
-        const names = (group.members||[]).map(m => { const id = typeof m === 'string' ? m : m.id; const mem = this.members.find(x => x.id === id); return mem ? mem.gameName : 'Unknown'; });
-        navigator.clipboard.writeText(`【${group.name}】 ${names.join(', ')}`).then(() => alert("已複製！"));
-    },
-    
+    // ... (UI Helper functions: openAddModal, openEditModal 等)
+    // ** 【重要】請務必將下面的 UI 函式也完整覆蓋，包含了新增時的職位鎖定邏輯 **
     openAddModal: function() { 
         document.getElementById('memberForm').reset(); document.getElementById('editId').value = ''; document.getElementById('deleteBtnContainer').innerHTML = ''; 
+        
+        // 確保職業下拉菜單初始化
         document.getElementById('baseJobSelect').value = ""; this.updateBaseJobSelect(); this.updateSubJobSelect(); 
         document.getElementById('subJobSelectWrapper').classList.remove('hidden'); document.getElementById('subJobInput').classList.add('hidden');
+        
+        // ** 新增成員時：鎖定職位為「成員」 **
+        const rankSelect = document.getElementById('rank'); const lockIcon = document.getElementById('rankLockIcon');
+        rankSelect.value = '成員';
+        if(this.userRole === 'master') { rankSelect.disabled = false; rankSelect.classList.remove('locked-field'); lockIcon.className = "fas fa-unlock text-blue-500 text-xs ml-2"; } 
+        else { rankSelect.disabled = true; rankSelect.classList.add('locked-field'); lockIcon.className = "fas fa-lock text-slate-300 text-xs ml-2"; }
+
         app.showModal('editModal'); 
     },
+
     openEditModal: function(id) {
         if (!id) return; const item = this.members.find(d => d.id === id); if (!item) return;
         document.getElementById('editId').value = item.id;
