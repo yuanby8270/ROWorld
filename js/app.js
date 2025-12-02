@@ -42,7 +42,7 @@ tailwind.config = {
 }
 
 
-// ** 2. 常量與初始數據 **
+// ** 2. 常量與初始數據 (移除 m01~m100 ID，只保留實際成員資料) **
 const DATA_VERSION = "6.0";
 const JOB_STYLES = [
     { key: ['騎士'], class: 'bg-job-knight', icon: 'fa-shield-alt' }, { key: ['十字軍'], class: 'bg-job-crusader', icon: 'fa-cross' }, { key: ['鐵匠', '商人'], class: 'bg-job-blacksmith', icon: 'fa-hammer' },
@@ -60,109 +60,81 @@ const JOB_STRUCTURE = {
     "槍手": ["一般", "其他"], "初心者": ["超級初心者", "其他"]
 };
 
+// 移除 ID (mXX) 欄位，讓 Firebase 重新賦予所有數據唯一的隨機 ID
 const SEED_DATA = [
-    { id: "m01", lineName: "poppy🐶", gameName: "YT清燉小羔羊", mainClass: "神官(讚美)", role: "輔助", rank: "會長", intro: "公會唯一清流 出淤泥而不染" },
-    { id: "m02", lineName: "#Yuan", gameName: "沐沐", mainClass: "神官(讚美)", role: "輔助", rank: "資料管理員", intro: "" },
-    { id: "m03", lineName: "Lam 🦄", gameName: "孤芳自賞", mainClass: "獵人(陷阱)", role: "輸出", rank: "成員", intro: "" },
-    { id: "m04", lineName: "alan", gameName: "小櫻花", mainClass: "武僧", role: "輔助", rank: "成員", intro: "待領養孤兒" },
-    { id: "m05", lineName: "董宜坤", gameName: "去去彈匣清空", mainClass: "槍手", role: "輸出", rank: "成員", intro: "" },
-    { id: "m06", lineName: "阿智", gameName: "恐龍跌倒", mainClass: "獵人(鳥)", role: "待定", rank: "成員", intro: "待領養孤兒" },
-    { id: "m07", lineName: "佳慶", gameName: "襪子髒髒", mainClass: "神官(讚美)", role: "輔助", rank: "成員", intro: "" },
-    { id: "m08", lineName: "騰億", gameName: "魅力四射", mainClass: "獵人(鳥)", role: "待定", rank: "成員", intro: "" },
-    { id: "m09", lineName: "Xian", gameName: "沐瑀", mainClass: "", role: "待定", rank: "成員", intro: "" },
-    { id: "m10", lineName: "咘小欣", gameName: "貓二", mainClass: "", role: "待定", rank: "成員", intro: "" },
-    { id: "m11", lineName: "奕雲", gameName: "奕雲", mainClass: "", role: "待定", rank: "成員", intro: "" },
-    { id: "m12", lineName: "宇", gameName: "崔月月", mainClass: "獵人(鳥)", role: "輸出", rank: "成員", intro: "" },
-    { id: "m13", lineName: "宏", gameName: "魔魂大白鯊", mainClass: "獵人(鳥)", role: "輸出", rank: "成員", intro: "" },
-    { id: "m14", lineName: "🐬", gameName: "貝席兒", mainClass: "煉金", role: "待定", rank: "成員", intro: "待領養孤兒" },
-    { id: "m15", lineName: "賀", gameName: "渺渺喵", mainClass: "", role: "待定", rank: "成員", intro: "" },
-    { id: "m16", lineName: "鄒昀諭YunYuZou", gameName: "馬爾科姆", mainClass: "獵人(鳥)", role: "待定", rank: "成員", intro: "5678不同爸爸" },
-    { id: "m17", lineName: "黑輪呦", gameName: "香菜佐黑輪", mainClass: "", role: "待定", rank: "成員", intro: "" },
-    { id: "m18", lineName: "Peng", gameName: "棨棨", mainClass: "十字軍(坦)", role: "坦", rank: "成員", intro: "Здравствуйте ! как дела ?" },
-    { id: "m19", lineName: "江承峻", gameName: "開喜婆婆", mainClass: "", role: "待定", rank: "成員", intro: "" },
-    { id: "m20", lineName: "妃Fei ", gameName: "FeiFei ", mainClass: "法師(隕)", role: "輸出", rank: "成員", intro: "" },
-    { id: "m21", lineName: "古銘", gameName: "卉香", mainClass: "刺客(敏爆)", role: "輸出", rank: "成員", intro: "" },
-    { id: "m22", lineName: "傑森", gameName: "傑森七七", mainClass: "神官(讚美)", role: "輔助", rank: "成員", intro: "" },
-    { id: "m23", lineName: "陳嘉圻", gameName: "陳小圻", mainClass: "獵人(鳥)", role: "輸出", rank: "成員", intro: "大白鯊的朋友" },
-    { id: "m24", lineName: "Leo", gameName: "藤井樹", mainClass: "法師(隕)", role: "輸出", rank: "成員", intro: "" },
-    { id: "m25", lineName: "小涵", gameName: "妞妞甜八寶", mainClass: "神官(讚美)", role: "輔助", rank: "成員", intro: "大白鯊的母奶" },
-    { id: "m26", lineName: "星野悠（ホシノユウ）", gameName: "", mainClass: "鐵匠", role: "待定", rank: "成員", intro: "" },
-    { id: "m27", lineName: "浩", gameName: "YT泰愛玩遊戲直bo", mainClass: "槍手", role: "輸出", rank: "成員", intro: "" },
-    { id: "m28", lineName: "六六", gameName: "六六", mainClass: "十字軍(坦)", role: "坦", rank: "成員", intro: "" },
-    { id: "m29", lineName: "灬森灬", gameName: "大雄", mainClass: "槍手", role: "輸出", rank: "成員", intro: "待領養孤兒" },
-    { id: "m30", lineName: "陳小貓", gameName: "貓璃", mainClass: "刺客", role: "輸出", rank: "成員", intro: "睡神無敵朋友" },
-    { id: "m31", lineName: "pei.yu.yang", gameName: "迪卡普歐", mainClass: "鐵匠", role: "待定", rank: "成員", intro: "睡神無敵麻吉" },
-    { id: "m32", lineName: "A-Wei 黃執維", gameName: "睡神無敵", mainClass: "獵人(鳥)", role: "輸出", rank: "成員", intro: "睡神就是無敵" },
-    { id: "m33", lineName: "阿揚", gameName: "牧牧", mainClass: "槍手", role: "輸出", rank: "成員", intro: "待領養孤兒" },
-    { id: "m34", lineName: "徐小宏🖖🏼", gameName: "莫忘中出", mainClass: "槍手", role: "輸出", rank: "成員", intro: "" },
-    { id: "m35", lineName: "Wang", gameName: "極度", mainClass: "法師(念)", role: "輸出", rank: "成員", intro: "" },
-    { id: "m36", lineName: "Ryan", gameName: "水鏡是條狗", mainClass: "", role: "待定", rank: "成員", intro: "" },
-    { id: "m37", lineName: "兩廣寬", gameName: "新竹房仲兩廣", mainClass: "賢者", role: "輔助", rank: "成員", intro: "" },
-    { id: "m38", lineName: "富邦-Shawn(小逸)", gameName: "HsuBoBo", mainClass: "刺客(敏爆)", role: "輸出", rank: "成員", intro: "" },
-    { id: "m39", lineName: "成成", gameName: "該獵戶已夜梟", mainClass: "獵人(鳥)", role: "待定", rank: "成員", intro: "待領養孤兒" },
-    { id: "m40", lineName: "魏駿翔", gameName: "歐洲獨角獸", mainClass: "流氓(輸出)", role: "待定", rank: "成員", intro: "" },
-    { id: "m41", lineName: "Louie", gameName: "水蜜桃王", mainClass: "獵人(鳥)", role: "輸出", rank: "成員", intro: "櫻花表弟" },
-    { id: "m42", lineName: "Keith-匠屋空間工作室", gameName: "潘朵拉企鵝", mainClass: "流氓(脫裝)", role: "輸出", rank: "成員", intro: "待領養孤兒, 我喜歡大叔" },
-    { id: "m43", lineName: "明", gameName: "白非羽", mainClass: "槍手", role: "輔助", rank: "成員", intro: "待領養孤兒" },
-    { id: "m44", lineName: "中古車採購 威霖", gameName: "Weilin", mainClass: "", role: "待定", rank: "成員", intro: "" },
-    { id: "m45", lineName: "江", gameName: "蝸牛丶", mainClass: "獵人(鳥)", role: "輸出", rank: "成員", intro: "" },
-    { id: "m46", lineName: "ZhenYun", gameName: "三十九度八", mainClass: "神官(讚美)", role: "輔助", rank: "成員", intro: "待領養孤兒" },
-    { id: "m47", lineName: "小寶", gameName: "提摩丶", mainClass: "獵人(鳥)", role: "輸出", rank: "成員", intro: "待領養孤兒" },
-    { id: "m48", lineName: "張誌恒", gameName: "珮可", mainClass: "神官(讚美)", role: "輔助", rank: "成員", intro: "待領養孤兒" },
-    { id: "m49", lineName: "哈啾", gameName: "哈啾", mainClass: "", role: "待定", rank: "成員", intro: "哈啾本哈" },
-    { id: "m50", lineName: "丫鵬", gameName: "長歌恨", mainClass: "獵人(鳥)", role: "待定", rank: "成員", intro: "" },
-    { id: "m51", lineName: "Agera", gameName: "嘎拉", mainClass: "騎士(敏爆)", role: "待定", rank: "成員", intro: "待領養孤兒" },
-    { id: "m52", lineName: "許竣凱", gameName: "老婆幫我儲一單", mainClass: "十字軍(坦)", role: "坦", rank: "成員", intro: "" },
-    { id: "m53", lineName: "Wei", gameName: "冬天君", mainClass: "獵人(鳥)", role: "坦", rank: "成員", intro: "待領養孤兒" },
-    { id: "m54", lineName: "Randy", gameName: "啤酒香煙法力無邊", mainClass: "十字軍(坦)", role: "坦", rank: "成員", intro: "" },
-    { id: "m55", lineName: "隆", gameName: "批星戴月", mainClass: "刺客(毒)", role: "輸出", rank: "成員", intro: "大白鯊的朋友" },
-    { id: "m56", lineName: "汪", gameName: "139", mainClass: "槍手", role: "輸出", rank: "成員", intro: "" },
-    { id: "m57", lineName: "Jimmy Chou", gameName: "靈刀灰休", mainClass: "", role: "待定", rank: "成員", intro: "" },
-    { id: "m58", lineName: "gary", gameName: "陳冠希", mainClass: "獵人(鳥)", role: "輸出", rank: "成員", intro: "大白鯊的朋友" },
-    { id: "m59", lineName: "Eric", gameName: "南門小皮", mainClass: "刺客(敏爆)", role: "輸出", rank: "成員", intro: "" },
-    { id: "m60", lineName: "", gameName: "Lucia", mainClass: "刺客(敏爆)", role: "輸出", rank: "成員", intro: "" },
-    { id: "m61", lineName: "恩蓉MoMo", gameName: "冷炩兒", mainClass: "", role: "待定", rank: "成員", intro: "" },
-    { id: "m62", lineName: "GcJie", gameName: "貓窩下的星空", mainClass: "槍手", role: "輸出", rank: "成員", intro: "待領養孤兒" },
-    { id: "m63", lineName: "Sean Liou", gameName: "青川", mainClass: "獵人(鳥)", role: "輸出", rank: "成員", intro: "" },
-    { id: "m64", lineName: "🐰", gameName: "初蕾丶", mainClass: "神官(讚美)", role: "輔助", rank: "成員", intro: "" },
-    { id: "m65", lineName: "阿賢", gameName: "碧空炎冰", mainClass: "槍手", role: "輸出", rank: "成員", intro: "" },
-    { id: "m66", lineName: "仲軒", gameName: "熊熊很大", mainClass: "法師(隕)", role: "輸出", rank: "成員", intro: "" },
-    { id: "m67", lineName: "航", gameName: "小波", mainClass: "獵人(鳥)", role: "輸出", rank: "成員", intro: "" },
-    { id: "m68", lineName: "Pogin", gameName: "Pogin", mainClass: "詩人", role: "輔助", rank: "成員", intro: "待領養孤兒, 哈啾老公" },
-    { id: "m69", lineName: "咩假屁謀", gameName: "", mainClass: "", role: "待定", rank: "成員", intro: "" },
-    { id: "m70", lineName: "廖琮昱", gameName: "果仔", mainClass: "賢者", role: "待定", rank: "成員", intro: "待領養孤兒" },
-    { id: "m71", lineName: "鍾豐年", gameName: "daliesi", mainClass: "刺客(毒)", role: "輔助", rank: "成員", intro: "" },
-    { id: "m72", lineName: "蔡家昕", gameName: "星夜", mainClass: "刺客(毒)", role: "輸出", rank: "成員", intro: "睡神無敵小弟" },
-    { id: "m73", lineName: "NICK", gameName: "狗是水鏡", mainClass: "流氓(輸出)", role: "輸出", rank: "成員", intro: "" },
-    
-    // 從 #74 擴展到 #100 的空位
-    { id: "m74", lineName: "", gameName: "空位", mainClass: "初心者", role: "待定", rank: "成員", intro: "預留成員 #74" },
-    { id: "m75", lineName: "", gameName: "空位", mainClass: "初心者", role: "待定", rank: "成員", intro: "預留成員 #75" },
-    { id: "m76", lineName: "", gameName: "空位", mainClass: "初心者", role: "待定", rank: "成員", intro: "預留成員 #76" },
-    { id: "m77", lineName: "", gameName: "空位", mainClass: "初心者", role: "待定", rank: "成員", intro: "預留成員 #77" },
-    { id: "m78", lineName: "", gameName: "空位", mainClass: "初心者", role: "待定", rank: "成員", intro: "預留成員 #78" },
-    { id: "m79", lineName: "", gameName: "空位", mainClass: "初心者", role: "待定", rank: "成員", intro: "預留成員 #79" },
-    { id: "m80", lineName: "", gameName: "空位", mainClass: "初心者", role: "待定", rank: "成員", intro: "預留成員 #80" },
-    { id: "m81", lineName: "", gameName: "空位", mainClass: "初心者", role: "待定", rank: "成員", intro: "預留成員 #81" },
-    { id: "m82", lineName: "", gameName: "空位", mainClass: "初心者", role: "待定", rank: "成員", intro: "預留成員 #82" },
-    { id: "m83", lineName: "", gameName: "空位", mainClass: "初心者", role: "待定", rank: "成員", intro: "預留成員 #83" },
-    { id: "m84", lineName: "", gameName: "空位", mainClass: "初心者", role: "待定", rank: "成員", intro: "預留成員 #84" },
-    { id: "m85", lineName: "", gameName: "空位", mainClass: "初心者", role: "待定", rank: "成員", intro: "預留成員 #85" },
-    { id: "m86", lineName: "", gameName: "空位", mainClass: "初心者", role: "待定", rank: "成員", intro: "預留成員 #86" },
-    { id: "m87", lineName: "", gameName: "空位", mainClass: "初心者", role: "待定", rank: "成員", intro: "預留成員 #87" },
-    { id: "m88", lineName: "", gameName: "空位", mainClass: "初心者", role: "待定", rank: "成員", intro: "預留成員 #88" },
-    { id: "m89", lineName: "", gameName: "空位", mainClass: "初心者", role: "待定", rank: "成員", intro: "預留成員 #89" },
-    { id: "m90", lineName: "", gameName: "空位", mainClass: "初心者", role: "待定", rank: "成員", intro: "預留成員 #90" },
-    { id: "m91", lineName: "", gameName: "空位", mainClass: "初心者", role: "待定", rank: "成員", intro: "預留成員 #91" },
-    { id: "m92", lineName: "", gameName: "空位", mainClass: "初心者", role: "待定", rank: "成員", intro: "預留成員 #92" },
-    { id: "m93", lineName: "", gameName: "空位", mainClass: "初心者", role: "待定", rank: "成員", intro: "預留成員 #93" },
-    { id: "m94", lineName: "", gameName: "空位", mainClass: "初心者", role: "待定", rank: "成員", intro: "預留成員 #94" },
-    { id: "m95", lineName: "", gameName: "空位", mainClass: "初心者", role: "待定", rank: "成員", intro: "預留成員 #95" },
-    { id: "m96", lineName: "", gameName: "空位", mainClass: "初心者", role: "待定", rank: "成員", intro: "預留成員 #96" },
-    { id: "m97", lineName: "", gameName: "空位", mainClass: "初心者", role: "待定", rank: "成員", intro: "預留成員 #97" },
-    { id: "m98", lineName: "", gameName: "空位", mainClass: "初心者", role: "待定", rank: "成員", intro: "預留成員 #98" },
-    { id: "m99", lineName: "", gameName: "空位", mainClass: "初心者", role: "待定", rank: "成員", intro: "預留成員 #99" },
-    { id: "m100", lineName: "", gameName: "空位", mainClass: "初心者", role: "待定", rank: "成員", intro: "預留成員 #100" }
+    { lineName: "poppy🐶", gameName: "YT清燉小羔羊", mainClass: "神官(讚美)", role: "輔助", rank: "會長", intro: "公會唯一清流 出淤泥而不染" },
+    { lineName: "#Yuan", gameName: "沐沐", mainClass: "神官(讚美)", role: "輔助", rank: "資料管理員", intro: "" },
+    { lineName: "Lam 🦄", gameName: "孤芳自賞", mainClass: "獵人(陷阱)", role: "輸出", rank: "成員", intro: "" },
+    { lineName: "alan", gameName: "小櫻花", mainClass: "武僧", role: "輔助", rank: "成員", intro: "待領養孤兒" },
+    { lineName: "董宜坤", gameName: "去去彈匣清空", mainClass: "槍手", role: "輸出", rank: "成員", intro: "" },
+    { lineName: "阿智", gameName: "恐龍跌倒", mainClass: "獵人(鳥)", role: "待定", rank: "成員", intro: "待領養孤兒" },
+    { lineName: "佳慶", gameName: "襪子髒髒", mainClass: "神官(讚美)", role: "輔助", rank: "成員", intro: "" },
+    { lineName: "騰億", gameName: "魅力四射", mainClass: "獵人(鳥)", role: "待定", rank: "成員", intro: "" },
+    { lineName: "Xian", gameName: "沐瑀", mainClass: "", role: "待定", rank: "成員", intro: "" },
+    { lineName: "咘小欣", gameName: "貓二", mainClass: "", role: "待定", rank: "成員", intro: "" },
+    { lineName: "奕雲", gameName: "奕雲", mainClass: "", role: "待定", rank: "成員", intro: "" },
+    { lineName: "宇", gameName: "崔月月", mainClass: "獵人(鳥)", role: "輸出", rank: "成員", intro: "" },
+    { lineName: "宏", gameName: "魔魂大白鯊", mainClass: "獵人(鳥)", role: "輸出", rank: "成員", intro: "" },
+    { lineName: "🐬", gameName: "貝席兒", mainClass: "煉金", role: "待定", rank: "成員", intro: "待領養孤兒" },
+    { lineName: "賀", gameName: "渺渺喵", mainClass: "", role: "待定", rank: "成員", intro: "" },
+    { lineName: "鄒昀諭YunYuZou", gameName: "馬爾科姆", mainClass: "獵人(鳥)", role: "待定", rank: "成員", intro: "5678不同爸爸" },
+    { lineName: "黑輪呦", gameName: "香菜佐黑輪", mainClass: "", role: "待定", rank: "成員", intro: "" },
+    { lineName: "Peng", gameName: "棨棨", mainClass: "十字軍(坦)", role: "坦", rank: "成員", intro: "Здравствуйте ! как дела ?" },
+    { lineName: "江承峻", gameName: "開喜婆婆", mainClass: "", role: "待定", rank: "成員", intro: "" },
+    { lineName: "妃Fei ", gameName: "FeiFei ", mainClass: "法師(隕)", role: "輸出", rank: "成員", intro: "" },
+    { lineName: "古銘", gameName: "卉香", mainClass: "刺客(敏爆)", role: "輸出", rank: "成員", intro: "" },
+    { lineName: "傑森", gameName: "傑森七七", mainClass: "神官(讚美)", role: "輔助", rank: "成員", intro: "" },
+    { lineName: "陳嘉圻", gameName: "陳小圻", mainClass: "獵人(鳥)", role: "輸出", rank: "成員", intro: "大白鯊的朋友" },
+    { lineName: "Leo", gameName: "藤井樹", mainClass: "法師(隕)", role: "輸出", rank: "成員", intro: "" },
+    { lineName: "小涵", gameName: "妞妞甜八寶", mainClass: "神官(讚美)", role: "輔助", rank: "成員", intro: "大白鯊的母奶" },
+    { lineName: "星野悠（ホシノユウ）", gameName: "", mainClass: "鐵匠", role: "待定", rank: "成員", intro: "" },
+    { lineName: "浩", gameName: "YT泰愛玩遊戲直bo", mainClass: "槍手", role: "輸出", rank: "成員", intro: "" },
+    { lineName: "六六", gameName: "六六", mainClass: "十字軍(坦)", role: "坦", rank: "成員", intro: "" },
+    { lineName: "灬森灬", gameName: "大雄", mainClass: "槍手", role: "輸出", rank: "成員", intro: "待領養孤兒" },
+    { lineName: "陳小貓", gameName: "貓璃", mainClass: "刺客", role: "輸出", rank: "成員", intro: "睡神無敵朋友" },
+    { lineName: "pei.yu.yang", gameName: "迪卡普歐", mainClass: "鐵匠", role: "待定", rank: "成員", intro: "睡神無敵麻吉" },
+    { lineName: "A-Wei 黃執維", gameName: "睡神無敵", mainClass: "獵人(鳥)", role: "輸出", rank: "成員", intro: "睡神就是無敵" },
+    { lineName: "阿揚", gameName: "牧牧", mainClass: "槍手", role: "輸出", rank: "成員", intro: "待領養孤兒" },
+    { lineName: "徐小宏🖖🏼", gameName: "莫忘中出", mainClass: "槍手", role: "輸出", rank: "成員", intro: "" },
+    { lineName: "Wang", gameName: "極度", mainClass: "法師(念)", role: "輸出", rank: "成員", intro: "" },
+    { lineName: "Ryan", gameName: "水鏡是條狗", mainClass: "", role: "待定", rank: "成員", intro: "" },
+    { lineName: "兩廣寬", gameName: "新竹房仲兩廣", mainClass: "賢者", role: "輔助", rank: "成員", intro: "" },
+    { lineName: "富邦-Shawn(小逸)", gameName: "HsuBoBo", mainClass: "刺客(敏爆)", role: "輸出", rank: "成員", intro: "" },
+    { lineName: "成成", gameName: "該獵戶已夜梟", mainClass: "獵人(鳥)", role: "待定", rank: "成員", intro: "待領養孤兒" },
+    { lineName: "魏駿翔", gameName: "歐洲獨角獸", mainClass: "流氓(輸出)", role: "待定", rank: "成員", intro: "" },
+    { lineName: "Louie", gameName: "水蜜桃王", mainClass: "獵人(鳥)", role: "輸出", rank: "成員", intro: "櫻花表弟" },
+    { lineName: "Keith-匠屋空間工作室", gameName: "潘朵拉企鵝", mainClass: "流氓(脫裝)", role: "輸出", rank: "成員", intro: "待領養孤兒, 我喜歡大叔" },
+    { lineName: "明", gameName: "白非羽", mainClass: "槍手", role: "輔助", rank: "成員", intro: "待領養孤兒" },
+    { lineName: "中古車採購 威霖", gameName: "Weilin", mainClass: "", role: "待定", rank: "成員", intro: "" },
+    { lineName: "江", gameName: "蝸牛丶", mainClass: "獵人(鳥)", role: "輸出", rank: "成員", intro: "" },
+    { lineName: "ZhenYun", gameName: "三十九度八", mainClass: "神官(讚美)", role: "輔助", rank: "成員", intro: "待領養孤兒" },
+    { lineName: "小寶", gameName: "提摩丶", mainClass: "獵人(鳥)", role: "輸出", rank: "成員", intro: "待領養孤兒" },
+    { lineName: "張誌恒", gameName: "珮可", mainClass: "神官(讚美)", role: "輔助", rank: "成員", intro: "待領養孤兒" },
+    { lineName: "哈啾", gameName: "哈啾", mainClass: "", role: "待定", rank: "成員", intro: "哈啾本哈" },
+    { lineName: "丫鵬", gameName: "長歌恨", mainClass: "獵人(鳥)", role: "待定", rank: "成員", intro: "" },
+    { lineName: "Agera", gameName: "嘎拉", mainClass: "騎士(敏爆)", role: "待定", rank: "成員", intro: "待領養孤兒" },
+    { lineName: "許竣凱", gameName: "老婆幫我儲一單", mainClass: "十字軍(坦)", role: "坦", rank: "成員", intro: "" },
+    { lineName: "Wei", gameName: "冬天君", mainClass: "獵人(鳥)", role: "坦", rank: "成員", intro: "待領養孤兒" },
+    { lineName: "Randy", gameName: "啤酒香煙法力無邊", mainClass: "十字軍(坦)", role: "坦", rank: "成員", intro: "" },
+    { lineName: "隆", gameName: "批星戴月", mainClass: "刺客(毒)", role: "輸出", rank: "成員", intro: "大白鯊的朋友" },
+    { lineName: "汪", gameName: "139", mainClass: "槍手", role: "輸出", rank: "成員", intro: "" },
+    { lineName: "Jimmy Chou", gameName: "靈刀灰休", mainClass: "", role: "待定", rank: "成員", intro: "" },
+    { lineName: "gary", gameName: "陳冠希", mainClass: "獵人(鳥)", role: "輸出", rank: "成員", intro: "大白鯊的朋友" },
+    { lineName: "Eric", gameName: "南門小皮", mainClass: "刺客(敏爆)", role: "輸出", rank: "成員", intro: "" },
+    { lineName: "", gameName: "Lucia", mainClass: "刺客(敏爆)", role: "輸出", rank: "成員", intro: "" },
+    { lineName: "恩蓉MoMo", gameName: "冷炩兒", mainClass: "", role: "待定", rank: "成員", intro: "" },
+    { lineName: "GcJie", gameName: "貓窩下的星空", mainClass: "槍手", role: "輸出", rank: "成員", intro: "待領養孤兒" },
+    { lineName: "Sean Liou", gameName: "青川", mainClass: "獵人(鳥)", role: "輸出", rank: "成員", intro: "" },
+    { lineName: "🐰", gameName: "初蕾丶", mainClass: "神官(讚美)", role: "輔助", rank: "成員", intro: "" },
+    { lineName: "阿賢", gameName: "碧空炎冰", mainClass: "槍手", role: "輸出", rank: "成員", intro: "" },
+    { lineName: "仲軒", gameName: "熊熊很大", mainClass: "法師(隕)", role: "輸出", rank: "成員", intro: "" },
+    { lineName: "航", gameName: "小波", mainClass: "獵人(鳥)", role: "輸出", rank: "成員", intro: "" },
+    { lineName: "Pogin", gameName: "Pogin", mainClass: "詩人", role: "輔助", rank: "成員", intro: "待領養孤兒, 哈啾老公" },
+    { lineName: "咩假屁謀", gameName: "", mainClass: "", role: "待定", rank: "成員", intro: "" },
+    { lineName: "廖琮昱", gameName: "果仔", mainClass: "賢者", role: "待定", rank: "成員", intro: "待領養孤兒" },
+    { lineName: "鍾豐年", gameName: "daliesi", mainClass: "刺客(毒)", role: "輔助", rank: "成員", intro: "" },
+    { lineName: "蔡家昕", gameName: "星夜", mainClass: "刺客(毒)", role: "輸出", rank: "成員", intro: "睡神無敵小弟" },
+    { lineName: "NICK", gameName: "狗是水鏡", mainClass: "流氓(輸出)", role: "輸出", rank: "成員", intro: "" }
 ];
 
 const SEED_GROUPS = [];
@@ -213,19 +185,10 @@ const App = {
         this.switchTab('home'); 
     },
     
+    // ** 變更：改用遊戲名排序，而非固定 ID **
     sortMembers: function(membersArray) {
         return membersArray.sort((a, b) => {
-            const idA = a.id;
-            const idB = b.id;
-            const isSeedA = /^m\d{2}$/.test(idA);
-            const isSeedB = /^m\d{2}$/. ядерном
-            
-            if (isSeedA && isSeedB) {
-                return idA.localeCompare(idB);
-            }
-            if (isSeedA) return -1; 
-            if (isSeedB) return 1;  
-            
+            // 主要依據遊戲名 (gameName) 進行排序
             return (a.gameName || '').localeCompare(b.gameName || '');
         });
     },
@@ -272,7 +235,7 @@ const App = {
 
     // =======================================================
     // ** 【修復項目】App.seedFirebaseMembers 函式 **
-    // 修正寫入方式，使用 .doc() 強制隨機 ID，避免 m01, m02 衝突。
+    // 確保使用隨機 ID，避免 m01, m02 衝突。
     // =======================================================
     seedFirebaseMembers: async function() {
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'row-guild-app';
@@ -281,10 +244,8 @@ const App = {
         // 確保使用 doc() 而不傳入參數，讓 Firebase 自動生成新的隨機 ID。
         SEED_DATA.forEach(item => { 
             const ref = this.db.collection('artifacts').doc(appId).collection('public').doc('data').collection(this.collectionMembers).doc(); 
-            // 由於種子數據包含 m01, m02 這些 ID，我們將其從數據中移除，
-            // 確保 Firebase 僅保存成員資訊，並使用新的隨機 ID 作為文件鍵。
-            const { id, ...data } = item;
-            batch.set(ref, data); 
+            // 寫入數據時，不傳入 id 欄位 (因為 SEED_DATA 已經沒有 id 欄位了)
+            batch.set(ref, item); 
         });
         
         await batch.commit();
@@ -471,6 +432,7 @@ const App = {
     addMember: async function(member) {
         if (this.mode === 'firebase') { 
             const appId = typeof __app_id !== 'undefined' ? __app_id : 'row-guild-app'; 
+            // 新增時使用 .add() 確保獲得隨機 ID
             await this.db.collection('artifacts').doc(appId).collection('public').doc('data').collection(this.collectionMembers).add(member); 
         } 
         else { 
@@ -481,10 +443,7 @@ const App = {
         }
     },
     
-    // =======================================================
-    // ** 【修復重點】App.updateMember 函式 **
-    // 解決 ID 衝突導致的更新失敗，並確保 Modal 關閉
-    // =======================================================
+    // 【修復重點】App.updateMember 函式 - 解決 ID 衝突時的崩潰問題
     updateMember: async function(id, member) {
         if (this.mode === 'firebase') { 
             const appId = typeof __app_id !== 'undefined' ? __app_id : 'row-guild-app'; 
@@ -514,13 +473,13 @@ const App = {
             } 
         }
     },
-    // =======================================================
 
     deleteMember: async function(id) {
         if (!confirm("確定要刪除這位成員嗎？")) return;
         const member = this.members.find(d => d.id === id);
         if (this.mode === 'firebase') { 
             const appId = typeof __app_id !== 'undefined' ? __app_id : 'row-guild-app'; 
+            // 直接刪除該隨機 ID 文件
             await this.db.collection('artifacts').doc(appId).collection('public').doc('data').collection(this.collectionMembers).doc(id).delete(); 
         } 
         else { 
@@ -638,6 +597,10 @@ const App = {
         grid.innerHTML = filtered.map((item, idx) => this.createCardHTML(item, idx)).join('');
     },
 
+    // =======================================================
+    // ** 【最終修復】App.createCardHTML 函式 **
+    // 移除所有數字序號邏輯，統一顯示星星符號。
+    // =======================================================
     createCardHTML: function(item, idx) {
         const jobName = item.mainClass || '';
         const style = JOB_STYLES.find(s => s.key.some(k => jobName.includes(k))) || { class: 'bg-job-default', icon: 'fa-user' };
@@ -653,19 +616,8 @@ const App = {
             return `<span class="${color} text-[10px] px-1.5 rounded border truncate inline-block max-w-[80px]">${s.name}</span>`;
         }).join('');
         
-        // --- 修正後的序號邏輯 ---
-        let displayNo = "•";
-        if (item.id && item.id.startsWith('m')) {
-            // 從 m01, m02 中提取數字並格式化為 #01, #02
-            const num = parseInt(item.id.substring(1));
-            if (!isNaN(num)) {
-                 displayNo = `#${num.toString().padStart(2, '0')}`;
-            }
-        } else {
-             // 針對新增的成員 (使用隨機 Firebase ID) 顯示 •
-             // 註：Firebase 隨機 ID 的成員不會有固定的序號
-             displayNo = "•";
-        }
+        // --- 最終序號邏輯：統一使用星星符號 ---
+        const displayNo = "★";
         // -------------------------
 
         const getRoleBadge = (r) => {
@@ -677,7 +629,7 @@ const App = {
 
         return `
             <div class="card cursor-pointer group relative" onclick="app.openEditModal('${item.id}')">
-                <div class="member-no">${displayNo}</div>
+                <div class="member-no text-xs font-cute font-bold">${displayNo}</div>
                 <div class="job-stripe ${style.class}"></div>
                 <div class="job-icon-area ${style.class} bg-opacity-20">
                     <i class="fas ${style.icon} ${style.class.replace('bg-', 'text-')} opacity-80 group-hover:scale-110 transition"></i>
@@ -707,6 +659,7 @@ const App = {
             </div>
         `;
     },
+    // =======================================================
     
     renderSquads: function() {
         const type = this.currentTab === 'gvg' ? 'gvg' : 'misc';
