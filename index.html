@@ -13,7 +13,26 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
     <script src="https://cdn.tailwindcss.com"></script>
-
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: { ro: { primary: '#4380D3', bg: '#e0f2fe' } },
+                    fontFamily: { 'cute': ['"ZCOOL KuaiLe"', '"Varela Round"', 'sans-serif'] },
+                    animation: {
+                        'float': 'float 6s ease-in-out infinite',
+                        'jelly': 'jelly 2s infinite',
+                        'fade-in': 'fadeIn 0.5s ease-out'
+                    },
+                    keyframes: {
+                        float: { '0%, 100%': { transform: 'translateY(0)' }, '50%': { transform: 'translateY(-10px)' } },
+                        jelly: { '0%, 100%': { transform: 'scale(1, 1)' }, '25%': { transform: 'scale(0.9, 1.1)' }, '50%': { transform: 'scale(1.1, 0.9)' }, '75%': { transform: 'scale(0.95, 1.05)' } },
+                        fadeIn: { '0%': { opacity: '0', transform: 'translateY(10px)' }, '100%': { opacity: '1', transform: 'translateY(0)' } }
+                    }
+                }
+            }
+        };
+    </script>
     <link rel="stylesheet" href="./css/styles.css"> 
     <style>
         /* 確保載入畫面最上層 */
@@ -49,7 +68,7 @@
             <div><h1 class="text-lg font-black text-slate-700 leading-tight tracking-tight font-cute">躺著不想動</h1></div>
         </div>
         <div class="flex items-center space-x-2">
-            <button id="adminToggleBtn" class="p-2 text-slate-400 hover:text-blue-500 transition rounded-xl border border-transparent"><i class="fas fa-user-shield"></i></button>
+            <button id="adminToggleBtn" class="p-2 text-slate-400 hover:text-blue-500 transition rounded-xl border border-transparent" onclick="app.userRole === 'guest' ? app.showModal('loginModal') : app.handleLogout()"><i class="fas fa-user-shield"></i></button>
             
             <div id="adminControls" class="flex items-center space-x-2 hidden">
                 <div class="relative group">
@@ -61,7 +80,8 @@
                 <button onclick="app.showModal('configModal')" class="p-2 text-slate-400 hover:text-blue-500 transition rounded-xl"><i class="fas fa-cog"></i></button>
             </div>
 
-            <button id="mainActionBtn" class="hidden bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg shadow-blue-200 px-3 py-2 rounded-xl font-bold transition flex items-center text-sm transform active:scale-95 border-b-4 border-blue-700">
+            <button id="mainActionBtn" class="hidden bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg shadow-blue-200 px-3 py-2 rounded-xl font-bold transition flex items-center text-sm transform active:scale-95 border-b-4 border-blue-700"
+                onclick="app.handleMainAction()">
                 <i class="fas fa-plus"></i>
             </button>
         </div>
@@ -69,11 +89,11 @@
 
     <div class="bg-white/30 backdrop-blur border-b border-white/40 sticky top-[60px] z-40" id="nav-container">
         <div class="container mx-auto px-4 py-2 flex space-x-2 overflow-x-auto scroll-hide">
-            <button id="tab-home" class="nav-pill active"><i class="fas fa-home mr-1"></i> 首頁</button>
-            <button id="tab-members" class="nav-pill"><i class="fas fa-users mr-1"></i> 名冊</button>
-            <button id="tab-gvg" class="nav-pill"><i class="fas fa-shield-alt mr-1"></i> GVG</button>
-            <button id="tab-groups" class="nav-pill"><i class="fas fa-campground mr-1"></i> 固定團</button>
-            <button id="tab-activities" class="nav-pill"><i class="fas fa-gifts mr-1"></i> 活動</button>
+            <button id="tab-home" class="nav-pill active" onclick="app.switchTab('home')"><i class="fas fa-home mr-1"></i> 首頁</button>
+            <button id="tab-members" class="nav-pill" onclick="app.switchTab('members')"><i class="fas fa-users mr-1"></i> 名冊</button>
+            <button id="tab-gvg" class="nav-pill" onclick="app.switchTab('gvg')"><i class="fas fa-shield-alt mr-1"></i> GVG</button>
+            <button id="tab-groups" class="nav-pill" onclick="app.switchTab('groups')"><i class="fas fa-campground mr-1"></i> 固定團</button>
+            <button id="tab-activities" class="nav-pill" onclick="app.switchTab('activities')"><i class="fas fa-gifts mr-1"></i> 活動</button>
         </div>
     </div>
 
@@ -103,22 +123,22 @@
                 <div class="poring-deco drops-deco"></div>
                 <div class="poring-deco poporing-deco"></div>
                 
-                <div id="btn-home-members" class="ro-menu-btn group cursor-pointer">
+                <div id="btn-home-members" class="ro-menu-btn group cursor-pointer" onclick="app.switchTab('members')">
                     <div class="icon-box"><i class="fas fa-book-open"></i></div>
                     <div class="ro-btn-content"><h3>成員名冊</h3><p>Guild Members</p></div>
                 </div>
                 
-                <div id="btn-home-activities" class="ro-menu-btn btn-gvg group cursor-pointer" style="border-color: #db2777;">
+                <div id="btn-home-activities" class="ro-menu-btn btn-gvg group cursor-pointer" style="border-color: #db2777;" onclick="app.switchTab('activities')">
                     <div class="icon-box" style="background: linear-gradient(135deg, #f472b6 0%, #db2777 100%); border-color: #fbcfe8;"><i class="fas fa-gifts"></i></div>
                     <div class="ro-btn-content"><h3>公會活動</h3><p>Events & Rewards</p></div>
                 </div>
                 
-                <div id="btn-home-gvg" class="ro-menu-btn btn-gvg group cursor-pointer">
+                <div id="btn-home-gvg" class="ro-menu-btn btn-gvg group cursor-pointer" onclick="app.switchTab('gvg')">
                     <div class="icon-box"><i class="fas fa-shield-alt"></i></div>
                     <div class="ro-btn-content"><h3>GVG 分組</h3><p>War of Emperium</p></div>
                 </div>
                 
-                <div id="btn-home-groups" class="ro-menu-btn btn-grp group cursor-pointer">
+                <div id="btn-home-groups" class="ro-menu-btn btn-grp group cursor-pointer" onclick="app.switchTab('groups')">
                     <div class="icon-box"><i class="fas fa-fire"></i></div>
                     <div class="ro-btn-content"><h3>固定團</h3><p>Dungeons & Party</p></div>
                 </div>
@@ -184,6 +204,7 @@
         
         <div id="view-gvg" class="hidden">
             <div class="flex justify-between items-center mb-4"><h2 class="text-xl font-bold text-slate-700">GVG 攻城戰分組</h2></div>
+            <div id="gvgSquadGrid" class="grid grid-cols-1 lg:grid-cols-2 gap-4"></div>
              </div>
 
 
