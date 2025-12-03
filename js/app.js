@@ -38,27 +38,38 @@ const App = {
         const storedAct = localStorage.getItem('row_local_activities');
         const storedHistory = localStorage.getItem('row_mod_history');
         
-        // --- 排序修正核心 ---
-        let initialMembers = storedMem ? JSON.parse(storedMem) : SEED_DATA;
+        // --- 排序修正核心邏輯 ---
+        let currentMembers = storedMem ? JSON.parse(storedMem) : SEED_DATA;
         
-        // 設定一個基準舊時間 (例如 2023/1/1)
-        // SEED_DATA 依照陣列順序，賦予遞增的時間戳記
-        // index 0 (m01) = baseTime
-        // index 1 (m02) = baseTime + 1000
+        // 設定一個基準舊時間 (2023/1/1)
         const baseTime = new Date('2023-01-01').getTime();
 
-        this.members = initialMembers.map((m, index) => ({
-            ...m,
-            // 若成員已有 createdAt 則保留，否則依照「原始索引順序」賦予時間
-            createdAt: m.createdAt || (baseTime + index * 1000) 
-        }));
+        // 強制校正：遍歷所有成員，如果是「初始種子成員」，強制重設時間戳記
+        this.members = currentMembers.map(m => {
+            // 檢查此成員是否在 SEED_DATA 中 (依據 ID)
+            const seedIndex = SEED_DATA.findIndex(seed => seed.id === m.id);
+            
+            if (seedIndex !== -1) {
+                // [關鍵修復] 是初始成員 -> 忽視 localStorage 的舊時間，強制依照 SEED 順序給予時間
+                // m01 = baseTime, m02 = baseTime + 1000ms...
+                return { ...m, createdAt: baseTime + (seedIndex * 1000) };
+            } else {
+                // 是後來手動新增的成員 -> 保留原本的時間 (若無則給現在時間)
+                return { ...m, createdAt: m.createdAt || Date.now() };
+            }
+        });
 
         this.groups = storedGrp ? JSON.parse(storedGrp) : SEED_GROUPS;
         this.activities = storedAct ? JSON.parse(storedAct) : (SEED_ACTIVITIES || []);
         this.history = storedHistory ? JSON.parse(storedHistory) : [];
         
-        // 載入後立即排序
+        // 執行排序：由舊到新
         this.members = this.sortMembers(this.members);
+        
+        // 立即存回 LocalStorage 以修正錯誤的快取
+        if (this.mode === 'demo') {
+            this.saveLocal('members');
+        }
     },
 
     initFirebase: function() {
@@ -107,16 +118,16 @@ const App = {
         }
     },
 
-    // --- 排序邏輯修正：由舊到新 (Ascending) ---
+    // --- 排序邏輯：由舊到新 (Ascending) ---
     sortMembers: function(membersArray) {
         return membersArray.sort((a, b) => {
-            // 升冪排序：時間小的(舊的/m01)在前面，時間大的(新的)在後面
+            // 升冪排序：時間小的(舊的)在前面
             const timeA = a.createdAt || 0;
             const timeB = b.createdAt || 0;
             if (timeA !== timeB) {
                 return timeA - timeB; 
             }
-            // 若時間完全相同，則依 ID 排序確保穩定
+            // 時間相同則比對 ID
             return (a.id || '').localeCompare(b.id || '');
         });
     },
