@@ -1,4 +1,4 @@
-// app.js - Final Version (Lock Leave Status Click)
+// app.js - Final Version (Fix: Leave Deletion Logic)
 
 if (typeof window.AppConfig === 'undefined') {
     console.error("Configuration (config.js) not loaded.");
@@ -207,7 +207,7 @@ const App = {
         const cnt = document.querySelector('#view-home .ro-menu-btn .ro-btn-content p'); if (cnt) cnt.innerText = `Guild Members (${this.members.length})`;
     },
 
-    // --- 請假管理邏輯 ---
+    // --- 請假管理邏輯 (Fix: Deletion Logic) ---
     toggleLeaveForm: function() { document.getElementById('leaveFormContainer').classList.toggle('hidden'); },
     
     togglePreLeaveMode: function() {
@@ -351,7 +351,10 @@ const App = {
         });
 
         const filtered = allLeaves.filter(L => {
-            return L.gameName.toLowerCase().includes(sName) && (fDate ? L.date === fDate : true) && (fSub ? L.subject === fSub : true);
+            const matchName = L.gameName.toLowerCase().includes(sName);
+            const matchDate = fDate ? L.date === fDate : true;
+            const matchSubject = fSub ? (fSub === '預先請假' ? L.source === 'pre' : L.subject === fSub) : true;
+            return matchName && matchDate && matchSubject;
         });
         filtered.sort((a, b) => new Date(b.date) - new Date(a.date));
         document.getElementById('leaveCountBadge').innerText = `${filtered.length} 人`;
@@ -361,7 +364,12 @@ const App = {
         container.innerHTML = filtered.map(L => {
             const subMem = L.subId ? this.members.find(m => m.id === L.subId) : null;
             const subText = subMem ? `<span class="text-blue-600"><i class="fas fa-exchange-alt mr-1"></i>替補: ${subMem.gameName}</span>` : (L.source==='pre' ? '-' : '<span class="text-red-400">尚未指定替補</span>');
-            const deleteAction = L.source === 'group' ? `app.cancelLeave('${L.groupId}', '${L.memberId}')` : `app.cancelPreLeave('${L.id}')`;
+            
+            // [Fixed] 確保這裡的 ID 正確傳遞
+            const deleteAction = L.source === 'group' 
+                ? `app.cancelLeave('${L.groupId}', '${L.memberId}')` 
+                : `app.cancelPreLeave('${L.id}')`;
+            
             return `<div class="bg-white p-4 rounded-xl shadow-sm border-l-4 ${L.source==='pre'?'border-l-gray-500':'border-l-orange-500'} flex justify-between items-start relative overflow-hidden"><div class="absolute right-0 top-0 p-2 opacity-10 text-6xl text-orange-200"><i class="fas fa-coffee"></i></div><div class="relative z-10"><div class="flex items-center gap-2 mb-1"><span class="font-bold text-slate-800 text-lg">${L.gameName}</span><span class="text-xs bg-slate-100 text-slate-500 px-2 py-0.5 rounded">${L.mainClass.split('(')[0]}</span></div><div class="text-xs text-slate-500 font-bold mb-1"><span class="bg-slate-100 px-1 rounded mr-1">${L.subject}</span> ${L.groupName}</div><div class="text-sm bg-orange-50 text-orange-800 px-3 py-2 rounded-lg inline-block mb-2"><div class="font-bold flex items-center"><i class="far fa-calendar-alt mr-2"></i>${L.date}</div><div class="text-xs mt-1 opacity-80">${L.note || '無備註'}</div></div><div class="text-xs font-bold bg-white border border-slate-100 rounded px-2 py-1 w-fit shadow-sm">${subText}</div></div><button onclick="${deleteAction}" class="text-slate-300 hover:text-red-500 p-2 transition z-20" title="取消請假"><i class="fas fa-times"></i></button></div>`;
         }).join('');
     },
@@ -377,9 +385,19 @@ const App = {
     
     cancelPreLeave: function(leaveId) {
         if (!confirm("確定要取消此預先請假嗎？")) return;
-        if (this.mode === 'firebase') { this.db.collection('leaves').doc(leaveId).delete(); }
-        else { this.leaves = this.leaves.filter(l => l.id !== leaveId); this.saveLocal('leaves'); }
-        this.renderLeaveList();
+        // [Fixed] 確保 Firebase 與 LocalStorage 同步刪除邏輯
+        if (this.mode === 'firebase') { 
+            this.db.collection('leaves').doc(leaveId).delete()
+            .then(() => {
+                this.leaves = this.leaves.filter(l => l.id !== leaveId); // Optimistic update
+                this.renderLeaveList();
+            })
+            .catch(err => alert("刪除失敗：" + err));
+        } else { 
+            this.leaves = this.leaves.filter(l => l.id !== leaveId); 
+            this.saveLocal('leaves'); 
+            this.renderLeaveList();
+        }
     },
 
     renderMembers: function() {
@@ -511,7 +529,6 @@ const App = {
                         } 
                         else if (m.subId) { const subMem = this.members.find(x => x.id === m.subId); if (subMem) subUI = `<span class="text-blue-500 text-xs mr-2">⇋ ${subMem.gameName}</span>`; }
                     }
-                    // [Updated] 移除黃燈 onclick 事件，僅保留 title 提示
                     actionUI = `<div class="flex items-center gap-1">${subUI}<div class="gvg-light bg-light-yellow ${m.status === 'leave' ? 'active' : ''}" title="請透過請假單修改狀態"></div><div class="gvg-light ${m.status === 'ready' ? 'bg-light-green active' : 'bg-light-red'}" title="狀態" onclick="event.stopPropagation(); app.toggleGvgStatus('${group.id}', '${m.id}', 'ready_toggle')"></div></div>`;
                 } else { actionUI = `<span class="text-xs text-slate-300 font-mono">ID:${m.id.slice(-3)}</span>`; }
                 return `<div class="flex items-center justify-between text-sm py-2.5 border-b border-slate-100 last:border-0 hover:bg-slate-50 px-3 transition ${rowClass}"><div class="flex items-center gap-3 min-w-0"><div class="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-xs font-bold ${roleColor}">${m.role.substring(0,1)}</div><div class="flex flex-col min-w-0"><span class="text-slate-800 font-bold truncate member-name">${m.gameName}</span><span class="text-[10px] text-slate-400 font-mono">${job}</span></div></div>${actionUI}</div>`;
@@ -540,7 +557,7 @@ const App = {
             return; 
         } 
         else if (action === 'ready_toggle') { 
-            // 綠燈切換只能在非請假狀態下進行，或強制覆蓋（視需求而定，目前設為不可覆蓋請假）
+            // 綠燈切換只能在非請假狀態下進行
             if (m.status === 'leave') return; 
             m.status = (m.status === 'ready') ? 'pending' : 'ready'; 
         }
@@ -636,7 +653,7 @@ const App = {
             
             let nameSuffix = '';
             if (isLeave) nameSuffix = ' <span class="text-red-500 font-bold text-[10px]">(請假)</span>';
-            else if (isBusy) nameSuffix = ' <span class="text-blue-500 font-bold text-[10px]">(他隊/替補)</span>';
+            else if (isBusy) nameSuffix = ' <span class="text-blue-500 font-bold text-[10px]">(已在其他隊)</span>';
 
             return `
             <label class="flex items-center space-x-2 p-2 rounded border border-blue-100 transition select-none ${checked ? 'bg-blue-50 border-blue-300' : disabledClass}">
