@@ -1,4 +1,4 @@
-// app.js - Optimized for Pre-Leave & Delete Protection
+// app.js - Full Fixed Version (With Pre-Leave Search)
 
 if (typeof window.AppConfig === 'undefined') {
     console.error("Configuration (config.js) not loaded.");
@@ -10,10 +10,9 @@ const { FIREBASE_CONFIG, COLLECTION_NAMES, SEED_DATA, SEED_GROUPS, SEED_ACTIVITI
 
 const App = {
     db: null, auth: null,
-    members: [], groups: [], activities: [], history: [], 
-    leaves: [], // [New] 獨立的預先請假資料
-    raidThemes: ['GVG 攻城戰'], // [Updated] 預設只保留 GVG
-    
+    members: [], groups: [], activities: [], history: [],
+    // 預設團體戰主題
+    raidThemes: ['GVG 攻城戰', '公會副本', '野外王'],
     currentTab: 'home', 
     currentFilter: 'all', currentJobFilter: 'all', 
     currentSquadRoleFilter: 'all', currentModalRoleFilter: 'all', 
@@ -41,14 +40,12 @@ const App = {
         const storedMem = localStorage.getItem('row_local_members');
         const storedGrp = localStorage.getItem('row_local_groups');
         const storedAct = localStorage.getItem('row_local_activities');
-        const storedLeaves = localStorage.getItem('row_local_leaves'); // [New]
         const storedHistory = localStorage.getItem('row_mod_history');
         const storedThemes = localStorage.getItem('row_local_themes');
         
         this.members = storedMem ? JSON.parse(storedMem).map(m => this.normalizeMemberData(m)) : SEED_DATA.map(m => this.normalizeMemberData(m));
         this.groups = storedGrp ? JSON.parse(storedGrp) : SEED_GROUPS;
         this.activities = storedAct ? JSON.parse(storedAct) : (SEED_ACTIVITIES || []);
-        this.leaves = storedLeaves ? JSON.parse(storedLeaves) : []; // [New]
         this.history = storedHistory ? JSON.parse(storedHistory) : [];
         if (storedThemes) this.raidThemes = JSON.parse(storedThemes);
         this.members = this.sortMembers(this.members);
@@ -80,16 +77,12 @@ const App = {
             const arr = []; snap.forEach(d => arr.push({ id: d.id, ...d.data() })); 
             this.groups = arr; this.saveLocal('groups'); this.render(); 
         });
-        this.db.collection(COLLECTION_NAMES.ACTIVITIES).onSnapshot(snap => {
-            const arr = []; snap.forEach(d => arr.push({ id: d.id, ...d.data() }));
-            this.activities = arr; this.saveLocal('activities'); this.render();
-        });
-        // [New] 預先請假同步
-        const leavesCollection = 'leaves'; 
-        this.db.collection(leavesCollection).onSnapshot(snap => {
-            const arr = []; snap.forEach(d => arr.push({ id: d.id, ...d.data() }));
-            this.leaves = arr; this.saveLocal('leaves'); this.render();
-        });
+        if (COLLECTION_NAMES.ACTIVITIES) {
+            this.db.collection(COLLECTION_NAMES.ACTIVITIES).onSnapshot(snap => {
+                const arr = []; snap.forEach(d => arr.push({ id: d.id, ...d.data() }));
+                this.activities = arr; this.saveLocal('activities'); this.render();
+            });
+        }
     },
 
     sortMembers: function(membersArray) {
@@ -105,7 +98,6 @@ const App = {
             if (key === 'members' || key === 'all') localStorage.setItem('row_local_members', JSON.stringify(this.members));
             if (key === 'groups' || key === 'all') localStorage.setItem('row_local_groups', JSON.stringify(this.groups));
             if (key === 'activities' || key === 'all') localStorage.setItem('row_local_activities', JSON.stringify(this.activities));
-            if (key === 'leaves' || key === 'all') localStorage.setItem('row_local_leaves', JSON.stringify(this.leaves)); // [New]
             if (key === 'themes' || key === 'all') localStorage.setItem('row_local_themes', JSON.stringify(this.raidThemes));
             localStorage.setItem('row_mod_history', JSON.stringify(this.history));
             this.render();
@@ -145,7 +137,6 @@ const App = {
         if (this.userRole === 'master') { if (rankSelect) rankSelect.disabled = false; if (lockIcon) lockIcon.className = "fas fa-unlock text-blue-500 text-xs ml-2"; } 
         else { if (rankSelect) rankSelect.disabled = true; if (lockIcon) lockIcon.className = "fas fa-lock text-slate-300 text-xs ml-2"; }
         
-        // 控制新增與刪除主題按鈕
         const addSubBtn = document.getElementById('addSubjectBtn');
         const delSubBtn = document.getElementById('delSubjectBtn');
         if (addSubBtn) { if (this.userRole === 'master') addSubBtn.classList.remove('hidden'); else addSubBtn.classList.add('hidden'); }
@@ -186,35 +177,58 @@ const App = {
         const cnt = document.querySelector('#view-home .ro-menu-btn .ro-btn-content p'); if (cnt) cnt.innerText = `Guild Members (${this.members.length})`;
     },
 
-    // --- 請假管理邏輯 (NEW: 預先請假支援) ---
+    // --- 請假管理邏輯 (Updated: Pre-Leave Search) ---
     toggleLeaveForm: function() { document.getElementById('leaveFormContainer').classList.toggle('hidden'); },
     
-    // [New] 切換預先請假模式
+    // [Updated] 切換預先請假模式 & 搜尋欄位
     togglePreLeaveMode: function() {
         const isPre = document.getElementById('isPreLeave').checked;
         const subSelect = document.getElementById('leaveSubjectSelect');
         const memSelect = document.getElementById('leaveMemberSelect');
         const arrow = document.getElementById('subjectArrow');
+        const searchInput = document.getElementById('preLeaveSearchInput');
         
         if (isPre) {
             subSelect.innerHTML = '<option value="PRE_LEAVE" selected>全日 (不分主題)</option>';
             subSelect.disabled = true;
             subSelect.classList.add('bg-orange-50', 'text-orange-500');
             if(arrow) arrow.classList.add('hidden');
+            if(searchInput) {
+                searchInput.classList.remove('hidden');
+                searchInput.value = '';
+                searchInput.focus();
+            }
             
-            // 直接載入所有成員
-            memSelect.disabled = false;
-            memSelect.innerHTML = '<option value="" disabled selected>選擇人員...</option>';
-            // 排序成員
-            const sorted = [...this.members].sort((a,b) => a.gameName.localeCompare(b.gameName));
-            sorted.forEach(m => {
-                memSelect.innerHTML += `<option value="${m.id}">${m.gameName}</option>`;
-            });
+            // Render all members initially
+            this.renderPreLeaveOptions('');
         } else {
-            // 恢復正常模式
             subSelect.classList.remove('bg-orange-50', 'text-orange-500');
             if(arrow) arrow.classList.remove('hidden');
-            this.updateLeaveSubjectSelect(); // 重跑日期檢查
+            if(searchInput) searchInput.classList.add('hidden');
+            this.updateLeaveSubjectSelect(); // Reset
+        }
+    },
+
+    // [New] 根據搜尋關鍵字渲染預先請假人員列表
+    renderPreLeaveOptions: function(searchTerm = "") {
+        const memSelect = document.getElementById('leaveMemberSelect');
+        memSelect.disabled = false;
+        memSelect.innerHTML = '<option value="" disabled selected>選擇人員...</option>';
+        
+        const term = searchTerm.toLowerCase();
+        const sorted = [...this.members].sort((a,b) => a.gameName.localeCompare(b.gameName));
+        
+        const filtered = sorted.filter(m => 
+            m.gameName.toLowerCase().includes(term) || 
+            (m.lineName && m.lineName.toLowerCase().includes(term))
+        );
+
+        if (filtered.length === 0) {
+            memSelect.innerHTML = '<option value="" disabled>無符合搜尋結果</option>';
+        } else {
+            filtered.forEach(m => {
+                memSelect.innerHTML += `<option value="${m.id}">${m.gameName}</option>`;
+            });
         }
     },
 
@@ -225,9 +239,13 @@ const App = {
         s.innerHTML = '<option value="" disabled selected>請先選日期</option>'; s.disabled = true;
         m.innerHTML = '<option value="" disabled selected>請先選主題</option>'; m.disabled = true;
         
-        document.getElementById('isPreLeave').checked = false; // 重置 Checkbox
+        document.getElementById('isPreLeave').checked = false;
         document.getElementById('leaveFormContainer').classList.add('hidden');
         document.getElementById('leaveSuccessMsg').classList.add('hidden');
+        
+        // Hide search input initially
+        const searchInput = document.getElementById('preLeaveSearchInput');
+        if(searchInput) searchInput.classList.add('hidden');
         
         const fs = document.getElementById('leaveFilterSubject');
         if(fs) fs.innerHTML = '<option value="">所有主題</option>' + this.raidThemes.map(t => `<option value="${t}">${t}</option>`).join('');
@@ -235,8 +253,7 @@ const App = {
     },
 
     updateLeaveSubjectSelect: function() {
-        if(document.getElementById('isPreLeave').checked) return; // 預先請假模式下不執行
-        
+        if(document.getElementById('isPreLeave').checked) return;
         const date = document.getElementById('leaveDateInput').value, s = document.getElementById('leaveSubjectSelect');
         s.innerHTML = '<option value="" disabled selected>請選擇主題...</option>';
         if (!date) { s.disabled = true; return; }
@@ -247,7 +264,7 @@ const App = {
     },
 
     updateLeaveMemberSelect: function() {
-        if(document.getElementById('isPreLeave').checked) return;
+        if(document.getElementById('isPreLeave').checked) return; // handled by search
 
         const date = document.getElementById('leaveDateInput').value, sub = document.getElementById('leaveSubjectSelect').value, m = document.getElementById('leaveMemberSelect');
         m.innerHTML = '<option value="" disabled selected>選擇人員...</option>';

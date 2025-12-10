@@ -139,10 +139,9 @@
                                 <label class="block text-xs font-bold text-slate-500">2. 選擇主題</label>
                                 <label class="flex items-center space-x-1 cursor-pointer select-none">
                                     <input type="checkbox" id="isPreLeave" onchange="app.togglePreLeaveMode()" class="w-4 h-4 text-orange-500 rounded border-gray-300 focus:ring-orange-500">
-                                    <span class="text-xs font-bold text-orange-600">預先請假 (不分主題)</span>
+                                    <span class="text-xs font-bold text-orange-600">預先請假 (全日)</span>
                                 </label>
                             </div>
-                            
                             <div class="relative">
                                 <select id="leaveSubjectSelect" onchange="app.updateLeaveMemberSelect()" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 outline-none font-bold text-slate-700 focus:ring-2 focus:ring-orange-200 transition appearance-none" required disabled>
                                     <option value="" disabled selected>請先選日期</option>
@@ -154,6 +153,8 @@
                     
                     <div>
                         <label class="block text-xs font-bold text-slate-500 mb-1">3. 選擇人員</label>
+                        <input type="text" id="preLeaveSearchInput" oninput="app.renderPreLeaveOptions(this.value)" placeholder="搜尋成員..." class="w-full mb-2 bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-sm outline-none focus:ring-2 focus:ring-orange-200 hidden transition">
+                        
                         <div class="relative">
                             <select id="leaveMemberSelect" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 outline-none font-bold text-slate-700 focus:ring-2 focus:ring-orange-200 transition appearance-none" required disabled>
                                 <option value="">請先完成上方選項</option>
