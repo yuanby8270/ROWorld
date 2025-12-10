@@ -32,7 +32,7 @@ const App = {
         this.switchTab('home');
     },
 
-    // --- (關鍵修復) 資料標準化函數 ---
+    // --- 資料標準化函數 ---
     normalizeMemberData: function(m) {
         const seedIndex = SEED_DATA.findIndex(seed => seed.id === m.id);
         if (seedIndex !== -1) {
@@ -222,29 +222,37 @@ const App = {
         const cnt = document.querySelector('#view-home .ro-menu-btn .ro-btn-content p'); if (cnt) cnt.innerText = `Guild Members (${this.members.length})`;
     },
 
-    // --- NEW: 請假管理邏輯 (Leave Management) ---
+    // --- 請假管理邏輯 (Leave Management Optimized) ---
     
+    toggleLeaveForm: function() {
+        const el = document.getElementById('leaveFormContainer');
+        el.classList.toggle('hidden');
+    },
+
     initLeaveForm: function() {
         const raidSelect = document.getElementById('leaveRaidSelect');
         const memberSelect = document.getElementById('leaveMemberSelect');
-        const dateInput = document.getElementById('leaveDate');
+        const dateInput = document.getElementById('leaveDateInput');
         const noteInput = document.getElementById('leaveNote');
-        const msg = document.getElementById('leaveSuccessMsg');
         
         // Reset Form
-        raidSelect.innerHTML = '<option value="" disabled selected>請選擇要請假的隊伍...</option>';
-        memberSelect.innerHTML = '<option value="">請先選擇隊伍</option>';
+        raidSelect.innerHTML = '<option value="" disabled selected>選擇隊伍...</option>';
+        memberSelect.innerHTML = '<option value="">先選隊伍</option>';
         memberSelect.disabled = true;
         dateInput.value = new Date().toISOString().split('T')[0]; // 預設今天
         noteInput.value = '';
-        msg.classList.add('hidden');
+        
+        document.getElementById('leaveFormContainer').classList.add('hidden'); // 預設隱藏
+        document.getElementById('leaveSuccessMsg').classList.add('hidden');
 
-        // Populate Raids (GVG Groups Only)
-        // 這裡我們只列出 GVG 隊伍，因為通常請假是針對 GVG
+        // Populate Raids (只列出 GVG 隊伍)
         const gvgGroups = this.groups.filter(g => g.type === 'gvg');
         gvgGroups.forEach(g => {
             raidSelect.innerHTML += `<option value="${g.id}">GVG - ${g.name}</option>`;
         });
+
+        // 渲染下方的請假列表
+        this.renderLeaveList();
     },
 
     updateLeaveMemberSelect: function() {
@@ -265,17 +273,122 @@ const App = {
             const mid = typeof m === 'string' ? m : m.id;
             const mem = this.members.find(x => x.id === mid);
             if (mem) {
-                // 標示該成員目前的狀態
                 const currentStatus = (typeof m === 'object' && m.status === 'leave') ? '(已請假)' : '';
                 memberSelect.innerHTML += `<option value="${mid}">${mem.gameName} ${currentStatus}</option>`;
             }
         });
     },
 
+    // 新增：渲染請假列表 (含搜尋與篩選)
+    renderLeaveList: function() {
+        const container = document.getElementById('leaveListGrid');
+        const noMsg = document.getElementById('noLeaveMsg');
+        const searchName = document.getElementById('leaveSearch').value.toLowerCase();
+        const filterDate = document.getElementById('leaveFilterDate').value;
+
+        let allLeaves = [];
+
+        // 1. 收集所有請假資料
+        this.groups.forEach(g => {
+            if (!g.members) return;
+            g.members.forEach(m => {
+                const isObj = typeof m !== 'string';
+                // 判斷是否請假
+                if (isObj && m.status === 'leave') {
+                    const memProfile = this.members.find(x => x.id === m.id);
+                    if (memProfile) {
+                        allLeaves.push({
+                            groupId: g.id,
+                            groupName: g.name,
+                            memberId: memProfile.id,
+                            gameName: memProfile.gameName,
+                            mainClass: memProfile.mainClass,
+                            date: m.leaveDate || '未填寫',
+                            note: m.leaveNote || '',
+                            subId: m.subId
+                        });
+                    }
+                }
+            });
+        });
+
+        // 2. 篩選
+        const filtered = allLeaves.filter(L => {
+            const matchName = L.gameName.toLowerCase().includes(searchName);
+            const matchDate = filterDate ? (L.date === filterDate) : true;
+            return matchName && matchDate;
+        });
+
+        // 3. 排序 (日期近的在上面)
+        filtered.sort((a, b) => new Date(b.date) - new Date(a.date));
+
+        // 4. 更新 UI
+        document.getElementById('leaveCountBadge').innerText = `${filtered.length} 人`;
+        
+        if (filtered.length === 0) {
+            container.innerHTML = '';
+            noMsg.classList.remove('hidden');
+            return;
+        }
+        noMsg.classList.add('hidden');
+
+        container.innerHTML = filtered.map(L => {
+            const subMem = L.subId ? this.members.find(m => m.id === L.subId) : null;
+            const subText = subMem ? `<span class="text-blue-600"><i class="fas fa-exchange-alt mr-1"></i>替補: ${subMem.gameName}</span>` : '<span class="text-red-400">尚未指定替補</span>';
+
+            return `
+            <div class="bg-white p-4 rounded-xl shadow-sm border-l-4 border-l-orange-500 flex justify-between items-start relative overflow-hidden">
+                <div class="absolute right-0 top-0 p-2 opacity-10 text-6xl text-orange-200"><i class="fas fa-coffee"></i></div>
+                <div class="relative z-10">
+                    <div class="flex items-center gap-2 mb-1">
+                        <span class="font-bold text-slate-800 text-lg">${L.gameName}</span>
+                        <span class="text-xs bg-slate-100 text-slate-500 px-2 py-0.5 rounded">${L.mainClass.split('(')[0]}</span>
+                    </div>
+                    <div class="text-xs text-slate-500 font-bold mb-2">
+                        <i class="fas fa-shield-alt text-slate-400 mr-1"></i>${L.groupName}
+                    </div>
+                    <div class="text-sm bg-orange-50 text-orange-800 px-3 py-2 rounded-lg inline-block mb-2">
+                        <div class="font-bold flex items-center"><i class="far fa-calendar-alt mr-2"></i>${L.date}</div>
+                        <div class="text-xs mt-1 opacity-80">${L.note || '無備註'}</div>
+                    </div>
+                    <div class="text-xs font-bold bg-white border border-slate-100 rounded px-2 py-1 w-fit shadow-sm">
+                        ${subText}
+                    </div>
+                </div>
+                <button onclick="app.cancelLeave('${L.groupId}', '${L.memberId}')" class="text-slate-300 hover:text-red-500 p-2 transition z-20" title="取消請假">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            `;
+        }).join('');
+    },
+
+    // 新增：取消請假
+    cancelLeave: function(groupId, memberId) {
+        if (!confirm("確定要取消此請假紀錄，讓成員回歸隊伍嗎？")) return;
+        
+        const group = this.groups.find(g => g.id === groupId);
+        if (!group) return;
+        
+        const idx = group.members.findIndex(m => (typeof m === 'string' ? m : m.id) === memberId);
+        if (idx === -1) return;
+
+        // 恢復狀態
+        let m = group.members[idx];
+        m.status = 'pending'; 
+        m.leaveDate = null;
+        m.leaveNote = null;
+        // 不清空 subId，保留彈性
+        
+        group.members[idx] = m;
+        this.saveGroupUpdate(group);
+        this.renderLeaveList(); 
+    },
+
     handleLeaveSubmit: function() {
         const groupId = document.getElementById('leaveRaidSelect').value;
         const memberId = document.getElementById('leaveMemberSelect').value;
-        const date = document.getElementById('leaveDate').value;
+        const date = document.getElementById('leaveDateInput').value;
         const note = document.getElementById('leaveNote').value;
         
         if (!groupId || !memberId || !date) {
@@ -292,22 +405,18 @@ const App = {
             return;
         }
 
-        // --- 核心連動邏輯 ---
-        // 直接更新該成員在該 Group 中的狀態物件
+        // 連動邏輯：直接更新 Group 成員狀態
         let m = group.members[index];
         if (typeof m === 'string') {
             m = { id: m, status: 'leave', subId: null, leaveDate: date, leaveNote: note };
         } else {
-            // 強制覆蓋為請假狀態
             m.status = 'leave';
             m.leaveDate = date;
             m.leaveNote = note;
-            // 清除之前的準備狀態，但保留 subId (如果有替補的話)
         }
         
         group.members[index] = m;
         
-        // 儲存變更
         this.saveGroupUpdate(group);
         this.logChange('新增請假', `${date} - ${note}`, memberId);
 
@@ -316,8 +425,8 @@ const App = {
         msg.classList.remove('hidden');
         setTimeout(() => msg.classList.add('hidden'), 3000);
         
-        // 重刷選單顯示狀態
-        this.updateLeaveMemberSelect();
+        this.toggleLeaveForm(); // 收起表單
+        this.renderLeaveList(); // 更新列表
     },
 
     // --- 成員相關邏輯 (保持不變) ---
@@ -361,7 +470,7 @@ const App = {
                     <div class="flex justify-between items-end mt-1">
                         <div class="flex flex-col gap-1 w-full mr-1">
                             <div class="flex items-center text-[10px] text-slate-400 font-mono bg-white border border-slate-100 rounded px-1.5 py-0.5 w-fit hover:bg-slate-50 copy-tooltip" onclick="event.stopPropagation(); app.copyText(this, '${item.lineName}')"><i class="fab fa-line mr-1 text-green-500"></i> ${item.lineName}</div>
-                            <div class="flex gap-1 overflow-hidden h-4">${squadBadges}</div>
+                            <div class="tag-area">${squadBadges}</div>
                         </div>
                         ${item.intro ? `<i class="fas fa-info-circle text-blue-200 hover:text-blue-500" title="${item.intro}"></i>` : ''}
                     </div>
