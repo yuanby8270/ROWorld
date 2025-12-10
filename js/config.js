@@ -21,6 +21,7 @@ const COLLECTION_NAMES = {
     MEMBERS: 'members',
     GROUPS: 'groups',
     ACTIVITIES: 'activities', 
+    LEAVE_REQUESTS: 'leave_requests' // 新增：請假單集合
 };
 
 // --- Job / Role Configuration ---
@@ -139,7 +140,7 @@ const SEED_ACTIVITIES = [
     }
 ];
 
-const APP_VERSION = '7.0';
+const APP_VERSION = '7.1';
 
 // 將所有配置變數掛載到全域物件 (window.AppConfig)，供 app.js 存取
 window.AppConfig = {

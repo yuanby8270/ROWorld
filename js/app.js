@@ -14,6 +14,7 @@ const { FIREBASE_CONFIG, COLLECTION_NAMES, SEED_DATA, SEED_GROUPS, SEED_ACTIVITI
 const App = {
     db: null, auth: null,
     members: [], groups: [], activities: [], history: [],
+    leaveRequests: [], // 新增：請假單資料
     currentTab: 'home', 
     currentFilter: 'all', currentJobFilter: 'all', 
     currentSquadRoleFilter: 'all', 
@@ -29,6 +30,7 @@ const App = {
         this.initFirebase();
         this.updateAdminUI();
         this.populateJobSelects();
+        // 預設切換到 home
         this.switchTab('home');
     },
 
@@ -56,6 +58,7 @@ const App = {
         const storedGrp = localStorage.getItem('row_local_groups');
         const storedAct = localStorage.getItem('row_local_activities');
         const storedHistory = localStorage.getItem('row_mod_history');
+        const storedLeave = localStorage.getItem('row_local_leave_requests'); // 新增：讀取請假單
         
         let rawMembers = storedMem ? JSON.parse(storedMem) : SEED_DATA;
         
@@ -65,6 +68,7 @@ const App = {
         this.groups = storedGrp ? JSON.parse(storedGrp) : SEED_GROUPS;
         this.activities = storedAct ? JSON.parse(storedAct) : (SEED_ACTIVITIES || []);
         this.history = storedHistory ? JSON.parse(storedHistory) : [];
+        this.leaveRequests = storedLeave ? JSON.parse(storedLeave) : []; // 新增
         
         this.members = this.sortMembers(this.members);
     },
@@ -91,14 +95,10 @@ const App = {
     syncWithFirebase: function() {
         if (!this.db || this.mode !== 'firebase') return;
         
-        // --- (關鍵修復) 在接收雲端資料時，同樣執行標準化 ---
         this.db.collection(COLLECTION_NAMES.MEMBERS).onSnapshot(snap => { 
             const rawArr = []; 
             snap.forEach(d => rawArr.push({ id: d.id, ...d.data() })); 
-            
-            // 這裡也要跑一次 normalize，防止雲端舊資料覆蓋本地正確排序
             const fixedArr = rawArr.map(m => this.normalizeMemberData(m));
-            
             this.members = this.sortMembers(fixedArr); 
             this.saveLocal('members'); 
             this.render(); 
@@ -116,6 +116,16 @@ const App = {
                 const arr = []; snap.forEach(d => arr.push({ id: d.id, ...d.data() }));
                 this.activities = arr; 
                 this.saveLocal('activities'); 
+                this.render();
+            });
+        }
+
+        // 新增：同步請假單
+        if (COLLECTION_NAMES.LEAVE_REQUESTS) {
+            this.db.collection(COLLECTION_NAMES.LEAVE_REQUESTS).onSnapshot(snap => {
+                const arr = []; snap.forEach(d => arr.push({ id: d.id, ...d.data() }));
+                this.leaveRequests = arr;
+                this.saveLocal('leave');
                 this.render();
             });
         }
@@ -138,6 +148,7 @@ const App = {
             if (key === 'members' || key === 'all') localStorage.setItem('row_local_members', JSON.stringify(this.members));
             if (key === 'groups' || key === 'all') localStorage.setItem('row_local_groups', JSON.stringify(this.groups));
             if (key === 'activities' || key === 'all') localStorage.setItem('row_local_activities', JSON.stringify(this.activities));
+            if (key === 'leave' || key === 'all') localStorage.setItem('row_local_leave_requests', JSON.stringify(this.leaveRequests)); // 新增
             localStorage.setItem('row_mod_history', JSON.stringify(this.history));
             this.render();
         }
@@ -184,9 +195,17 @@ const App = {
 
     switchTab: function(tab) {
         this.currentTab = tab;
-        ['home','members','groups','activity'].forEach(v => document.getElementById('view-'+v).classList.add('hidden'));
+        // 隱藏所有視圖
+        ['home','members','groups','activity', 'leave'].forEach(v => {
+            const el = document.getElementById('view-'+v);
+            if(el) el.classList.add('hidden');
+        });
+
         if(tab === 'gvg' || tab === 'groups') document.getElementById('view-groups').classList.remove('hidden');
-        else document.getElementById('view-'+tab).classList.remove('hidden');
+        else {
+            const el = document.getElementById('view-'+tab);
+            if(el) el.classList.remove('hidden');
+        }
 
         document.getElementById('nav-container').classList.toggle('hidden', tab === 'home');
         document.querySelectorAll('.nav-pill').forEach(b => b.classList.remove('active'));
@@ -205,6 +224,12 @@ const App = {
 
         if(tab === 'gvg') { document.getElementById('groupViewTitle').innerText = 'GVG 攻城戰分組'; document.getElementById('squadModalTitle').innerText = 'GVG 分組管理'; } 
         else if(tab === 'groups') { document.getElementById('groupViewTitle').innerText = '固定團列表'; document.getElementById('squadModalTitle').innerText = '固定團管理'; }
+        
+        // 新增：初始化請假畫面
+        if (tab === 'leave') {
+            this.renderLeaveRequests();
+        }
+
         this.render();
     },
 
@@ -218,12 +243,16 @@ const App = {
             if(this.userRole === 'master') this.openActivityModal();
             else alert("權限不足：僅有會長可建立活動");
         }
+        else if(this.currentTab === 'leave') { // 新增
+            this.openLeaveModal();
+        }
     },
     
     render: function() {
         if (this.currentTab === 'members') this.renderMembers();
         else if (this.currentTab === 'gvg' || this.currentTab === 'groups') this.renderSquads();
         else if (this.currentTab === 'activity') this.renderActivities();
+        else if (this.currentTab === 'leave') this.renderLeaveRequests(); // 新增
         const cnt = document.querySelector('#view-home .ro-menu-btn .ro-btn-content p'); if (cnt) cnt.innerText = `Guild Members (${this.members.length})`;
     },
 
@@ -984,8 +1013,157 @@ const App = {
     saveConfig: function() { try { const config = JSON.parse(document.getElementById('firebaseConfigInput').value); if (!config.apiKey) throw new Error(); localStorage.setItem('row_firebase_config', JSON.stringify(config)); location.reload(); } catch { alert("JSON 格式錯誤！"); } },
     resetToDemo: function() { if (!confirm("確定要重置所有資料嗎？")) return; localStorage.clear(); location.reload(); },
     showModal: function(id) { document.getElementById(id).classList.remove('hidden'); },
-    closeModal: function(id) { document.getElementById(id).classList.add('hidden'); }
+    closeModal: function(id) { document.getElementById(id).classList.add('hidden'); },
+
+    // --- 請假系統邏輯 ---
+    renderLeaveRequests: function() {
+        const list = document.getElementById('leaveList');
+        const emptyMsg = document.getElementById('noLeavesMsg');
+        const search = document.getElementById('leaveSearchInput').value.toLowerCase();
+        const dateFilter = document.getElementById('leaveDateFilter').value;
+
+        // 排序：新 > 舊 (根據 createdAt 倒序)
+        let sorted = [...this.leaveRequests].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+
+        // 過濾
+        const filtered = sorted.filter(req => {
+            const matchName = req.memberName.toLowerCase().includes(search);
+            const matchDate = dateFilter ? req.date === dateFilter : true;
+            return matchName && matchDate;
+        });
+
+        if (filtered.length === 0) {
+            list.innerHTML = '';
+            emptyMsg.classList.remove('hidden');
+            return;
+        }
+        emptyMsg.classList.add('hidden');
+
+        list.innerHTML = filtered.map(req => {
+            // 找出對應成員的頭像資訊 (為了顯示顏色與職業)
+            const mem = this.members.find(m => m.id === req.memberId);
+            const jobClass = mem ? mem.mainClass : req.memberRole; // Fallback
+            const style = JOB_STYLES.find(s => s.key.some(k => (jobClass||'').includes(k))) || { class: 'bg-job-default', icon: 'fa-user' };
+            const dateStr = req.date; // 格式 YYYY-MM-DD
+            const createdStr = req.createdAt ? new Date(req.createdAt).toLocaleString('zh-TW', {month:'numeric', day:'numeric', hour:'numeric', minute:'numeric'}) : '';
+
+            // 刪除按鈕 (僅本人或管理員，這邊簡化為任何人可刪除 Demo，或限制權限)
+            const canDelete = ['master', 'admin', 'commander'].includes(this.userRole); 
+            const deleteBtn = canDelete ? 
+                `<button onclick="app.deleteLeaveRequest('${req.id}')" class="text-slate-400 hover:text-red-500 p-2"><i class="fas fa-trash-alt"></i></button>` : '';
+
+            return `
+            <div class="bg-white rounded-xl border border-slate-200 p-4 flex items-center shadow-sm relative overflow-hidden group">
+                <div class="absolute left-0 top-0 bottom-0 w-1 ${style.class}"></div>
+                <div class="w-12 h-12 rounded-2xl ${style.class} bg-opacity-20 flex items-center justify-center text-xl mr-4 flex-shrink-0">
+                    <i class="fas ${style.icon} ${style.class.replace('bg-', 'text-')}"></i>
+                </div>
+                <div class="flex-grow min-w-0">
+                    <div class="flex justify-between items-start">
+                        <h4 class="font-bold text-slate-700 truncate">${req.memberName}</h4>
+                        <span class="text-xs font-mono font-bold text-purple-600 bg-purple-50 px-2 py-0.5 rounded border border-purple-100">${dateStr}</span>
+                    </div>
+                    <p class="text-sm text-slate-500 mt-1 truncate"><span class="font-bold text-slate-400 text-xs mr-1">原因:</span>${req.reason}</p>
+                    <div class="text-[10px] text-slate-300 mt-1 flex justify-between">
+                        <span>申請於: ${createdStr}</span>
+                    </div>
+                </div>
+                <div class="ml-2">
+                    ${deleteBtn}
+                </div>
+            </div>`;
+        }).join('');
+    },
+
+    openLeaveModal: function() {
+        document.getElementById('leaveReason').value = 'GVG 無法參加';
+        document.getElementById('leaveMemberSearch').value = '';
+        document.getElementById('selectedLeaveMemberId').value = '';
+        
+        // 預設日期：取得當地時間的 YYYY-MM-DD
+        const now = new Date();
+        const localDate = new Date(now.getTime() - (now.getTimezoneOffset() * 60000)).toISOString().split('T')[0];
+        document.getElementById('leaveDateInput').value = localDate;
+
+        this.renderLeaveMemberSelect();
+        this.showModal('leaveModal');
+    },
+
+    renderLeaveMemberSelect: function() {
+        const grid = document.getElementById('leaveMemberSelectGrid');
+        const search = document.getElementById('leaveMemberSearch').value.toLowerCase();
+        const selectedId = document.getElementById('selectedLeaveMemberId').value;
+
+        const filtered = this.members.filter(m => (m.gameName + m.lineName).toLowerCase().includes(search));
+
+        grid.innerHTML = filtered.map(m => {
+            const style = JOB_STYLES.find(s => s.key.some(k => (m.mainClass||'').includes(k))) || { class: 'bg-job-default', icon: 'fa-user' };
+            const isSel = m.id === selectedId;
+            
+            return `
+            <div onclick="app.selectLeaveMember('${m.id}')" 
+                 class="cursor-pointer rounded-xl border p-2 flex flex-col items-center justify-center gap-1 transition-all ${isSel ? 'border-purple-500 bg-purple-50 ring-2 ring-purple-200' : 'border-slate-100 bg-slate-50 hover:bg-white hover:border-slate-300'}">
+                <div class="w-8 h-8 rounded-full ${style.class} bg-opacity-20 flex items-center justify-center text-xs">
+                    <i class="fas ${style.icon} ${style.class.replace('bg-', 'text-')}"></i>
+                </div>
+                <div class="text-[10px] font-bold text-slate-700 truncate w-full text-center">${m.gameName}</div>
+            </div>`;
+        }).join('');
+    },
+
+    selectLeaveMember: function(id) {
+        document.getElementById('selectedLeaveMemberId').value = id;
+        this.renderLeaveMemberSelect(); // Re-render to show active state
+    },
+
+    saveLeaveRequest: async function() {
+        const memberId = document.getElementById('selectedLeaveMemberId').value;
+        const date = document.getElementById('leaveDateInput').value;
+        const reason = document.getElementById('leaveReason').value;
+
+        if (!memberId) { alert("請選擇成員"); return; }
+        if (!date) { alert("請選擇日期"); return; }
+
+        const member = this.members.find(m => m.id === memberId);
+        
+        const reqData = {
+            memberId,
+            memberName: member ? member.gameName : 'Unknown',
+            memberRole: member ? member.mainClass : '',
+            date,
+            reason,
+            createdAt: Date.now(),
+            status: 'pending'
+        };
+
+        if (this.mode === 'firebase') {
+            await this.db.collection(COLLECTION_NAMES.LEAVE_REQUESTS).add(reqData);
+        } else {
+            reqData.id = 'lr_' + Date.now();
+            this.leaveRequests.unshift(reqData); // 新的在最前
+            this.saveLocal('leave');
+        }
+
+        // 模擬通知
+        alert(`假單已送出！\n\n系統已自動通知：\n👑 會長\n🧙‍♂️ 指揮官\n\n成員：${reqData.memberName}\n日期：${reqData.date}`);
+
+        this.closeModal('leaveModal');
+        this.renderLeaveRequests();
+    },
+
+    deleteLeaveRequest: async function(id) {
+        if (!confirm("確定要刪除這張假單嗎？")) return;
+        
+        if (this.mode === 'firebase') {
+            await this.db.collection(COLLECTION_NAMES.LEAVE_REQUESTS).doc(id).delete();
+        } else {
+            this.leaveRequests = this.leaveRequests.filter(r => r.id !== id);
+            this.saveLocal('leave');
+        }
+        this.renderLeaveRequests();
+    }
 };
 
+// 確保 App 掛載到 window
 window.app = App;
 window.onload = () => App.init();
