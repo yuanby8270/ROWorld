@@ -1,4 +1,4 @@
-// app.js - Optimized History Retention (14 Days)
+// app.js - Final Version (Lock Leave Status Click)
 
 if (typeof window.AppConfig === 'undefined') {
     console.error("Configuration (config.js) not loaded.");
@@ -19,7 +19,7 @@ const App = {
     currentSquadMembers: [], currentActivityWinners: [], tempWinnerSelection: [],
     leaves: [], // 預先請假資料
     BASE_TIME: new Date('2023-01-01').getTime(),
-    CLEANUP_DAYS: 14, // [New] 修改紀錄保留天數
+    CLEANUP_DAYS: 14, // 修改紀錄保留天數
 
     init: async function() {
         try {
@@ -57,9 +57,7 @@ const App = {
         this.history = storedHistory ? JSON.parse(storedHistory) : [];
         if (storedThemes) this.raidThemes = JSON.parse(storedThemes);
         
-        // [New] 載入時自動清理過期紀錄
         this.cleanOldHistory();
-        
         this.members = this.sortMembers(this.members);
     },
 
@@ -119,24 +117,16 @@ const App = {
         }
     },
     
-    // [New] 清理過期紀錄 (保留 14 天)
     cleanOldHistory: function() {
         const now = Date.now();
         const cutoff = now - (this.CLEANUP_DAYS * 24 * 60 * 60 * 1000);
         const originalCount = this.history.length;
-        
         this.history = this.history.filter(log => log.timestamp >= cutoff);
-        
-        if (this.history.length < originalCount) {
-            console.log(`已清理 ${originalCount - this.history.length} 筆過期紀錄`);
-            this.saveLocal('history'); // 立即儲存清理後的結果
-        }
+        if (this.history.length < originalCount) { this.saveLocal('history'); }
     },
     
     logChange: function(action, details, targetId) {
-        // 寫入前先清理一次，確保不會無限增長
         this.cleanOldHistory();
-        
         const log = { timestamp: Date.now(), user: this.userRole, action, details, targetId: targetId || 'N/A' };
         this.history.unshift(log); 
         this.saveLocal('history'); 
@@ -265,6 +255,9 @@ const App = {
             fs.innerHTML = opts;
         }
         
+        const filterDateInput = document.getElementById('leaveFilterDate');
+        if(filterDateInput) filterDateInput.value = '';
+
         this.updateLeaveSubjectSelect(); this.renderLeaveList();
     },
 
@@ -463,7 +456,6 @@ const App = {
         this.logChange('成員刪除', `ID: ${id}`, id); this.closeModal('editModal');
     },
 
-    // --- 隊伍管理核心邏輯 (Updated: 替補人員選單防呆) ---
     renderSquads: function() {
         const type = this.currentTab === 'gvg' ? 'gvg' : 'groups';
         const search = document.getElementById('groupSearchInput').value.toLowerCase();
@@ -492,17 +484,14 @@ const App = {
                     if (m.status === 'leave') {
                         if (canEdit) { 
                             let busyIds = [];
-                            // [Fix] 加入檢查替補人員是否忙碌的邏輯
                             if (group.date) {
                                 this.groups.forEach(g => {
                                     if (g.type === (group.type||'gvg') && g.date === group.date && g.id !== group.id) {
                                         g.members.forEach(gm => {
                                             const mid = typeof gm === 'string' ? gm : gm.id;
                                             busyIds.push(mid);
-                                            // 關鍵修正：如果這個人有替補，替補也要算忙碌
-                                            if (typeof gm === 'object' && gm.subId) {
-                                                busyIds.push(gm.subId);
-                                            }
+                                            // [Fix] 替補人員選單防呆
+                                            if (typeof gm === 'object' && gm.subId) { busyIds.push(gm.subId); }
                                         });
                                     }
                                 });
@@ -522,7 +511,8 @@ const App = {
                         } 
                         else if (m.subId) { const subMem = this.members.find(x => x.id === m.subId); if (subMem) subUI = `<span class="text-blue-500 text-xs mr-2">⇋ ${subMem.gameName}</span>`; }
                     }
-                    actionUI = `<div class="flex items-center gap-1">${subUI}<div class="gvg-light bg-light-yellow ${m.status === 'leave' ? 'active' : ''}" title="${m.status === 'leave' ? '請假' : '請假'}" onclick="event.stopPropagation(); app.toggleGvgStatus('${group.id}', '${m.id}', 'leave')"></div><div class="gvg-light ${m.status === 'ready' ? 'bg-light-green active' : 'bg-light-red'}" title="狀態" onclick="event.stopPropagation(); app.toggleGvgStatus('${group.id}', '${m.id}', 'ready_toggle')"></div></div>`;
+                    // [Updated] 移除黃燈 onclick 事件，僅保留 title 提示
+                    actionUI = `<div class="flex items-center gap-1">${subUI}<div class="gvg-light bg-light-yellow ${m.status === 'leave' ? 'active' : ''}" title="請透過請假單修改狀態"></div><div class="gvg-light ${m.status === 'ready' ? 'bg-light-green active' : 'bg-light-red'}" title="狀態" onclick="event.stopPropagation(); app.toggleGvgStatus('${group.id}', '${m.id}', 'ready_toggle')"></div></div>`;
                 } else { actionUI = `<span class="text-xs text-slate-300 font-mono">ID:${m.id.slice(-3)}</span>`; }
                 return `<div class="flex items-center justify-between text-sm py-2.5 border-b border-slate-100 last:border-0 hover:bg-slate-50 px-3 transition ${rowClass}"><div class="flex items-center gap-3 min-w-0"><div class="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-xs font-bold ${roleColor}">${m.role.substring(0,1)}</div><div class="flex flex-col min-w-0"><span class="text-slate-800 font-bold truncate member-name">${m.gameName}</span><span class="text-[10px] text-slate-400 font-mono">${job}</span></div></div>${actionUI}</div>`;
             }).join('');
@@ -545,8 +535,15 @@ const App = {
         const index = group.members.findIndex(m => (typeof m === 'string' ? m : m.id) === memberId);
         if (index === -1) return;
         let m = group.members[index]; if (typeof m === 'string') m = { id: m, status: 'pending', subId: null };
-        if (action === 'leave') { if (m.status === 'leave') { m.status = 'pending'; m.subId = null; } else { m.status = 'leave'; } } 
-        else if (action === 'ready_toggle') { if (m.status === 'leave') { m.status = 'ready'; m.subId = null; } else { m.status = (m.status === 'ready') ? 'pending' : 'ready'; } }
+        if (action === 'leave') { 
+            // [Updated] 鎖定黃燈切換邏輯，只能由請假單控制
+            return; 
+        } 
+        else if (action === 'ready_toggle') { 
+            // 綠燈切換只能在非請假狀態下進行，或強制覆蓋（視需求而定，目前設為不可覆蓋請假）
+            if (m.status === 'leave') return; 
+            m.status = (m.status === 'ready') ? 'pending' : 'ready'; 
+        }
         group.members[index] = m; this.saveGroupUpdate(group);
     },
     updateGvgSub: function(groupId, memberId, subId) {
