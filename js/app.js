@@ -1,12 +1,12 @@
-// app.js - Final Version (Fix: Leave Deletion Logic)
+// app.js - Final Fix (Delete Issue & Variable Collision Resolved)
 
 if (typeof window.AppConfig === 'undefined') {
-    console.error("Configuration (config.js) not loaded.");
+    console.error("Config not loaded.");
     document.body.innerHTML = '<div style="padding: 50px; text-align: center; color: red;">錯誤：config.js 未載入。</div>';
 }
 
-const Config = window.AppConfig || {};
-const { FIREBASE_CONFIG, COLLECTION_NAMES, SEED_DATA, SEED_GROUPS, SEED_ACTIVITIES, JOB_STRUCTURE, JOB_STYLES } = Config;
+// 直接使用 window.AppConfig，避免變數重複宣告錯誤
+const Cfg = window.AppConfig || {}; 
 
 const App = {
     db: null, auth: null,
@@ -30,12 +30,11 @@ const App = {
             this.switchTab('home'); 
         } catch (e) {
             console.error("App Init Error:", e);
-            alert("應用程式初始化失敗，請檢查控制台資訊。");
         }
     },
 
     normalizeMemberData: function(m) {
-        const seedIndex = SEED_DATA.findIndex(seed => seed.id === m.id);
+        const seedIndex = Cfg.SEED_DATA.findIndex(seed => seed.id === m.id);
         if (seedIndex !== -1) return { ...m, createdAt: this.BASE_TIME + (seedIndex * 1000) };
         return { ...m, createdAt: m.createdAt || Date.now() };
     },
@@ -43,6 +42,7 @@ const App = {
     loadLocalState: function() {
         const savedRole = localStorage.getItem('row_user_role');
         if (savedRole && ['admin', 'master', 'commander'].includes(savedRole)) this.userRole = savedRole;
+        
         const storedMem = localStorage.getItem('row_local_members');
         const storedGrp = localStorage.getItem('row_local_groups');
         const storedAct = localStorage.getItem('row_local_activities');
@@ -50,9 +50,9 @@ const App = {
         const storedHistory = localStorage.getItem('row_mod_history');
         const storedThemes = localStorage.getItem('row_local_themes');
         
-        this.members = storedMem ? JSON.parse(storedMem).map(m => this.normalizeMemberData(m)) : SEED_DATA.map(m => this.normalizeMemberData(m));
-        this.groups = storedGrp ? JSON.parse(storedGrp) : SEED_GROUPS;
-        this.activities = storedAct ? JSON.parse(storedAct) : (SEED_ACTIVITIES || []);
+        this.members = storedMem ? JSON.parse(storedMem).map(m => this.normalizeMemberData(m)) : Cfg.SEED_DATA.map(m => this.normalizeMemberData(m));
+        this.groups = storedGrp ? JSON.parse(storedGrp) : Cfg.SEED_GROUPS;
+        this.activities = storedAct ? JSON.parse(storedAct) : (Cfg.SEED_ACTIVITIES || []);
         this.leaves = storedLeaves ? JSON.parse(storedLeaves) : [];
         this.history = storedHistory ? JSON.parse(storedHistory) : [];
         if (storedThemes) this.raidThemes = JSON.parse(storedThemes);
@@ -64,7 +64,7 @@ const App = {
     initFirebase: function() {
         let config = null;
         const storedConfig = localStorage.getItem('row_firebase_config');
-        try { if (storedConfig) config = JSON.parse(storedConfig); else if (FIREBASE_CONFIG && FIREBASE_CONFIG.apiKey) config = FIREBASE_CONFIG; } catch (e) {}
+        try { if (storedConfig) config = JSON.parse(storedConfig); else if (Cfg.FIREBASE_CONFIG && Cfg.FIREBASE_CONFIG.apiKey) config = Cfg.FIREBASE_CONFIG; } catch (e) {}
         if (config && config.apiKey) {
             try {
                 if (!firebase.apps.length) firebase.initializeApp(config);
@@ -78,22 +78,35 @@ const App = {
     
     syncWithFirebase: function() {
         if (!this.db || this.mode !== 'firebase') return;
+        
+        const { COLLECTION_NAMES } = Cfg;
+
         this.db.collection(COLLECTION_NAMES.MEMBERS).onSnapshot(snap => { 
             const rawArr = []; snap.forEach(d => rawArr.push({ id: d.id, ...d.data() })); 
             this.members = this.sortMembers(rawArr.map(m => this.normalizeMemberData(m))); 
             this.saveLocal('members'); this.render(); 
         });
+        
         this.db.collection(COLLECTION_NAMES.GROUPS).onSnapshot(snap => { 
             const arr = []; snap.forEach(d => arr.push({ id: d.id, ...d.data() })); 
             this.groups = arr; this.saveLocal('groups'); this.render(); 
         });
+        
         this.db.collection(COLLECTION_NAMES.ACTIVITIES).onSnapshot(snap => {
             const arr = []; snap.forEach(d => arr.push({ id: d.id, ...d.data() }));
             this.activities = arr; this.saveLocal('activities'); this.render();
         });
+
+        // [Updated] 預先請假同步：確保 ID 一致
         this.db.collection('leaves').onSnapshot(snap => {
-            const arr = []; snap.forEach(d => arr.push({ id: d.id, ...d.data() }));
-            this.leaves = arr; this.saveLocal('leaves'); this.render();
+            const arr = []; 
+            snap.forEach(d => {
+                // 將 Firestore 的 Document ID 寫入物件 ID，確保刪除時能找到
+                arr.push({ ...d.data(), id: d.id }); 
+            });
+            this.leaves = arr; 
+            this.saveLocal('leaves'); 
+            this.renderLeaveList(); // 資料更新時即時重繪列表
         });
     },
 
@@ -207,7 +220,7 @@ const App = {
         const cnt = document.querySelector('#view-home .ro-menu-btn .ro-btn-content p'); if (cnt) cnt.innerText = `Guild Members (${this.members.length})`;
     },
 
-    // --- 請假管理邏輯 (Fix: Deletion Logic) ---
+    // --- 請假管理邏輯 ---
     toggleLeaveForm: function() { document.getElementById('leaveFormContainer').classList.toggle('hidden'); },
     
     togglePreLeaveMode: function() {
@@ -303,9 +316,16 @@ const App = {
         let success = false;
 
         if (isPre) {
-            const newLeave = { id: 'l_' + Date.now(), memberId: mid, date: d, note: n, type: 'pre-leave' };
-            if (this.mode === 'firebase') { this.db.collection('leaves').add(newLeave); }
-            else { this.leaves.push(newLeave); this.saveLocal('leaves'); }
+            // [Updated] 新增預先請假邏輯：若為 Firebase 模式，強制使用 docId 等於資料 ID，方便日後刪除
+            const leaveId = 'l_' + Date.now();
+            const newLeave = { id: leaveId, memberId: mid, date: d, note: n, type: 'pre-leave' };
+            
+            if (this.mode === 'firebase') { 
+                this.db.collection('leaves').doc(leaveId).set(newLeave); // 使用 .set() 指定文件ID
+            } else { 
+                this.leaves.push(newLeave); 
+                this.saveLocal('leaves'); 
+            }
             success = true;
         } else {
             const targetGroups = this.groups.filter(g => g.type === 'gvg' && g.date === d && g.subject === s);
@@ -364,12 +384,7 @@ const App = {
         container.innerHTML = filtered.map(L => {
             const subMem = L.subId ? this.members.find(m => m.id === L.subId) : null;
             const subText = subMem ? `<span class="text-blue-600"><i class="fas fa-exchange-alt mr-1"></i>替補: ${subMem.gameName}</span>` : (L.source==='pre' ? '-' : '<span class="text-red-400">尚未指定替補</span>');
-            
-            // [Fixed] 確保這裡的 ID 正確傳遞
-            const deleteAction = L.source === 'group' 
-                ? `app.cancelLeave('${L.groupId}', '${L.memberId}')` 
-                : `app.cancelPreLeave('${L.id}')`;
-            
+            const deleteAction = L.source === 'group' ? `app.cancelLeave('${L.groupId}', '${L.memberId}')` : `app.cancelPreLeave('${L.id}')`;
             return `<div class="bg-white p-4 rounded-xl shadow-sm border-l-4 ${L.source==='pre'?'border-l-gray-500':'border-l-orange-500'} flex justify-between items-start relative overflow-hidden"><div class="absolute right-0 top-0 p-2 opacity-10 text-6xl text-orange-200"><i class="fas fa-coffee"></i></div><div class="relative z-10"><div class="flex items-center gap-2 mb-1"><span class="font-bold text-slate-800 text-lg">${L.gameName}</span><span class="text-xs bg-slate-100 text-slate-500 px-2 py-0.5 rounded">${L.mainClass.split('(')[0]}</span></div><div class="text-xs text-slate-500 font-bold mb-1"><span class="bg-slate-100 px-1 rounded mr-1">${L.subject}</span> ${L.groupName}</div><div class="text-sm bg-orange-50 text-orange-800 px-3 py-2 rounded-lg inline-block mb-2"><div class="font-bold flex items-center"><i class="far fa-calendar-alt mr-2"></i>${L.date}</div><div class="text-xs mt-1 opacity-80">${L.note || '無備註'}</div></div><div class="text-xs font-bold bg-white border border-slate-100 rounded px-2 py-1 w-fit shadow-sm">${subText}</div></div><button onclick="${deleteAction}" class="text-slate-300 hover:text-red-500 p-2 transition z-20" title="取消請假"><i class="fas fa-times"></i></button></div>`;
         }).join('');
     },
@@ -383,16 +398,18 @@ const App = {
         group.members[idx] = m; this.saveGroupUpdate(group); this.renderLeaveList(); 
     },
     
+    // [Updated] 確保使用正確的 Firestore Document ID 進行刪除
     cancelPreLeave: function(leaveId) {
         if (!confirm("確定要取消此預先請假嗎？")) return;
-        // [Fixed] 確保 Firebase 與 LocalStorage 同步刪除邏輯
         if (this.mode === 'firebase') { 
             this.db.collection('leaves').doc(leaveId).delete()
             .then(() => {
-                this.leaves = this.leaves.filter(l => l.id !== leaveId); // Optimistic update
+                this.leaves = this.leaves.filter(l => l.id !== leaveId); // 樂觀更新
                 this.renderLeaveList();
             })
-            .catch(err => alert("刪除失敗：" + err));
+            .catch(err => {
+                alert("刪除失敗 (請確認網路連線): " + err);
+            });
         } else { 
             this.leaves = this.leaves.filter(l => l.id !== leaveId); 
             this.saveLocal('leaves'); 
@@ -414,7 +431,7 @@ const App = {
     },
     createCardHTML: function(item, idx) {
         const mainJob = item.mainClass ? item.mainClass.split('(')[0] : '';
-        const style = JOB_STYLES.find(s => s.key.some(k => mainJob.includes(k))) || { class: 'bg-job-default', icon: 'fa-user' };
+        const style = Cfg.JOB_STYLES.find(s => s.key.some(k => mainJob.includes(k))) || { class: 'bg-job-default', icon: 'fa-user' };
         let rankBadge = item.rank === '會長' ? `<span class="rank-badge rank-master">會長</span>` : item.rank === '指揮官' ? `<span class="rank-badge rank-commander">指揮官</span>` : item.rank === '資料管理員' ? `<span class="rank-badge rank-admin">管理</span>` : '';
         const memberSquads = this.groups.filter(g => g.members.some(m => (typeof m === 'string' ? m : m.id) === item.id));
         const squadBadges = memberSquads.map(s => {
@@ -430,10 +447,10 @@ const App = {
     setModalRoleFilter: function(f) { this.currentModalRoleFilter = f; this.renderSquadMemberSelect(); const btns = document.querySelectorAll('#modalFilterContainer button'); btns.forEach(b => { const isActive = (b.getAttribute('data-filter') === f); const activeClass = b.getAttribute('data-active-class'); b.className = isActive ? `px-3 py-1 rounded text-xs font-bold shadow-sm transition whitespace-nowrap active:scale-95 ${activeClass}` : `px-3 py-1 rounded text-xs font-bold bg-white text-slate-600 border border-slate-200 hover:bg-slate-50 transition whitespace-nowrap`; }); },
     populateJobSelects: function() { 
         const baseSelect = document.getElementById('baseJobSelect'), filterSelect = document.getElementById('filterJob');
-        if(baseSelect) { baseSelect.innerHTML = '<option value="" disabled selected>選擇職業</option>'; Object.keys(JOB_STRUCTURE).forEach(j => baseSelect.innerHTML += `<option value="${j}">${j}</option>`); }
-        if(filterSelect) { filterSelect.innerHTML = '<option value="all">所有職業</option>'; Object.keys(JOB_STRUCTURE).forEach(j => filterSelect.innerHTML += `<option value="${j}">${j}</option>`); }
+        if(baseSelect) { baseSelect.innerHTML = '<option value="" disabled selected>選擇職業</option>'; Object.keys(Cfg.JOB_STRUCTURE).forEach(j => baseSelect.innerHTML += `<option value="${j}">${j}</option>`); }
+        if(filterSelect) { filterSelect.innerHTML = '<option value="all">所有職業</option>'; Object.keys(Cfg.JOB_STRUCTURE).forEach(j => filterSelect.innerHTML += `<option value="${j}">${j}</option>`); }
     },
-    updateSubJobSelect: function() { const b = document.getElementById('baseJobSelect').value, s = document.getElementById('subJobSelect'); s.innerHTML = '<option value="" disabled selected>選擇流派</option>'; if (JOB_STRUCTURE[b]) { s.disabled = false; JOB_STRUCTURE[b].forEach(sub => s.innerHTML += `<option value="${b}(${sub})">${sub}</option>`); } else s.disabled = true; },
+    updateSubJobSelect: function() { const b = document.getElementById('baseJobSelect').value, s = document.getElementById('subJobSelect'); s.innerHTML = '<option value="" disabled selected>選擇流派</option>'; if (Cfg.JOB_STRUCTURE[b]) { s.disabled = false; Cfg.JOB_STRUCTURE[b].forEach(sub => s.innerHTML += `<option value="${b}(${sub})">${sub}</option>`); } else s.disabled = true; },
     toggleJobInputMode: function() { document.getElementById('subJobInput').classList.toggle('hidden'); document.getElementById('subJobSelectWrapper').classList.toggle('hidden'); },
     
     openAddModal: function() { document.getElementById('memberForm').reset(); document.getElementById('editId').value = ''; document.getElementById('deleteBtnContainer').innerHTML = ''; document.getElementById('baseJobSelect').value = ""; this.updateSubJobSelect(); document.getElementById('subJobSelectWrapper').classList.remove('hidden'); document.getElementById('subJobInput').classList.add('hidden'); app.showModal('editModal'); },
@@ -446,8 +463,8 @@ const App = {
         const fullJob = item.mainClass || '', match = fullJob.match(/^([^(]+)\(([^)]+)\)$/);
         if (['master', 'admin'].includes(this.userRole)) btn.classList.remove('hidden'); else btn.classList.add('hidden');
         subInput.classList.add('hidden'); wrapper.classList.remove('hidden');
-        if (match && JOB_STRUCTURE[match[1]]) { baseSelect.value = match[1]; this.updateSubJobSelect(); subSelect.value = fullJob; }
-        else { const potential = fullJob.split('(')[0]; if (JOB_STRUCTURE[potential]) { baseSelect.value = potential; this.updateSubJobSelect(); subSelect.value = fullJob; } else if (['master', 'admin'].includes(this.userRole)) { baseSelect.value = ""; subInput.value = fullJob; subInput.classList.remove('hidden'); wrapper.classList.add('hidden'); } else { baseSelect.value = ""; subSelect.disabled = true; } }
+        if (match && Cfg.JOB_STRUCTURE[match[1]]) { baseSelect.value = match[1]; this.updateSubJobSelect(); subSelect.value = fullJob; }
+        else { const potential = fullJob.split('(')[0]; if (Cfg.JOB_STRUCTURE[potential]) { baseSelect.value = potential; this.updateSubJobSelect(); subSelect.value = fullJob; } else if (['master', 'admin'].includes(this.userRole)) { baseSelect.value = ""; subInput.value = fullJob; subInput.classList.remove('hidden'); wrapper.classList.add('hidden'); } else { baseSelect.value = ""; subSelect.disabled = true; } }
         this.updateAdminUI(); document.getElementById('deleteBtnContainer').innerHTML = ['master', 'admin'].includes(this.userRole) ? `<button type="button" onclick="app.deleteMember('${item.id}')" class="text-red-500 text-sm hover:underline">刪除成員</button>` : '';
         app.showModal('editModal');
     },
@@ -461,16 +478,16 @@ const App = {
         if (!id) { memberData.createdAt = Date.now(); await this.addMember(memberData); } else { const originalMember = this.members.find(m => m.id === id); memberData.createdAt = originalMember ? originalMember.createdAt : Date.now(); await this.updateMember(id, memberData); }
         this.logChange(id?'成員更新':'新增成員', `${memberData.gameName}`, id || memberData.gameName); this.closeModal('editModal');
     },
-    addMember: async function(m) { if (this.mode === 'firebase') { await this.db.collection(COLLECTION_NAMES.MEMBERS).add(m); } else { m.id = 'm_' + Date.now(); this.members.push(m); this.members = this.sortMembers(this.members); this.saveLocal('members'); } },
-    updateMember: async function(id, m) { if (this.mode === 'firebase') { await this.db.collection(COLLECTION_NAMES.MEMBERS).doc(id).update(m); } else { const idx = this.members.findIndex(d => d.id === id); if (idx !== -1) { this.members[idx] = { ...this.members[idx], ...m }; this.members = this.sortMembers(this.members); this.saveLocal('members'); } } },
+    addMember: async function(m) { if (this.mode === 'firebase') { await this.db.collection(Cfg.COLLECTION_NAMES.MEMBERS).add(m); } else { m.id = 'm_' + Date.now(); this.members.push(m); this.members = this.sortMembers(this.members); this.saveLocal('members'); } },
+    updateMember: async function(id, m) { if (this.mode === 'firebase') { await this.db.collection(Cfg.COLLECTION_NAMES.MEMBERS).doc(id).update(m); } else { const idx = this.members.findIndex(d => d.id === id); if (idx !== -1) { this.members[idx] = { ...this.members[idx], ...m }; this.members = this.sortMembers(this.members); this.saveLocal('members'); } } },
     deleteMember: async function(id) {
         if (!['master', 'admin'].includes(this.userRole)) return; if (!confirm("確定要刪除這位成員嗎？")) return;
-        if (this.mode === 'firebase') { await this.db.collection(COLLECTION_NAMES.MEMBERS).doc(id).delete(); } 
+        if (this.mode === 'firebase') { await this.db.collection(Cfg.COLLECTION_NAMES.MEMBERS).doc(id).delete(); } 
         this.members = this.members.filter(d => d.id !== id); 
         this.groups.forEach(g => { g.members = g.members.filter(m => (typeof m === 'string' ? m : m.id) !== id); if (g.leaderId === id) { g.leaderId = null; } });
         this.activities.forEach(a => { a.winners = a.winners.map(w => { if (w.memberId === id) { return { ...w, memberId: id, isRetired: true }; } return w; }); });
         this.saveLocal();
-        if (this.mode === 'firebase') { this.groups.forEach(async g => { await this.db.collection(COLLECTION_NAMES.GROUPS).doc(g.id).update({ members: g.members, leaderId: g.leaderId }); }); this.activities.forEach(async a => { await this.db.collection(COLLECTION_NAMES.ACTIVITIES).doc(a.id).update({ winners: a.winners }); }); }
+        if (this.mode === 'firebase') { this.groups.forEach(async g => { await this.db.collection(Cfg.COLLECTION_NAMES.GROUPS).doc(g.id).update({ members: g.members, leaderId: g.leaderId }); }); this.activities.forEach(async a => { await this.db.collection(Cfg.COLLECTION_NAMES.ACTIVITIES).doc(a.id).update({ winners: a.winners }); }); }
         this.logChange('成員刪除', `ID: ${id}`, id); this.closeModal('editModal');
     },
 
@@ -508,7 +525,6 @@ const App = {
                                         g.members.forEach(gm => {
                                             const mid = typeof gm === 'string' ? gm : gm.id;
                                             busyIds.push(mid);
-                                            // [Fix] 替補人員選單防呆
                                             if (typeof gm === 'object' && gm.subId) { busyIds.push(gm.subId); }
                                         });
                                     }
@@ -552,15 +568,8 @@ const App = {
         const index = group.members.findIndex(m => (typeof m === 'string' ? m : m.id) === memberId);
         if (index === -1) return;
         let m = group.members[index]; if (typeof m === 'string') m = { id: m, status: 'pending', subId: null };
-        if (action === 'leave') { 
-            // [Updated] 鎖定黃燈切換邏輯，只能由請假單控制
-            return; 
-        } 
-        else if (action === 'ready_toggle') { 
-            // 綠燈切換只能在非請假狀態下進行
-            if (m.status === 'leave') return; 
-            m.status = (m.status === 'ready') ? 'pending' : 'ready'; 
-        }
+        if (action === 'leave') { return; } // 黃燈只能由請假單控制
+        else if (action === 'ready_toggle') { if (m.status === 'leave') return; m.status = (m.status === 'ready') ? 'pending' : 'ready'; }
         group.members[index] = m; this.saveGroupUpdate(group);
     },
     updateGvgSub: function(groupId, memberId, subId) {
@@ -569,7 +578,7 @@ const App = {
         let m = group.members[index]; if (typeof m === 'string') m = { id: m, status: 'pending' }; m.subId = subId; 
         group.members[index] = m; this.saveGroupUpdate(group);
     },
-    saveGroupUpdate: function(group) { if (this.mode === 'firebase') this.db.collection(COLLECTION_NAMES.GROUPS).doc(group.id).update({ members: group.members }); else this.saveLocal('groups'); },
+    saveGroupUpdate: function(group) { if (this.mode === 'firebase') this.db.collection(Cfg.COLLECTION_NAMES.GROUPS).doc(group.id).update({ members: group.members }); else this.saveLocal('groups'); },
     addCustomSubject: function() { const newSub = prompt("請輸入新主題名稱："); if (newSub && !this.raidThemes.includes(newSub)) { this.raidThemes.push(newSub); this.saveLocal('themes'); this.renderSubjectOptions(newSub); } },
     
     // [Updated] 刪除防呆
@@ -641,7 +650,7 @@ const App = {
         
         document.getElementById('squadMemberSelect').innerHTML = filtered.map(m => { 
             const checked = isSelected(m.id); 
-            const style = JOB_STYLES.find(s => s.key.some(k => (m.mainClass||'').includes(k))) || { class: 'bg-job-default', icon: 'fa-user' }; 
+            const style = Cfg.JOB_STYLES.find(s => s.key.some(k => (m.mainClass||'').includes(k))) || { class: 'bg-job-default', icon: 'fa-user' }; 
             
             // 防呆邏輯判斷
             const isLeave = preLeaveMembers.includes(m.id);
@@ -653,7 +662,7 @@ const App = {
             
             let nameSuffix = '';
             if (isLeave) nameSuffix = ' <span class="text-red-500 font-bold text-[10px]">(請假)</span>';
-            else if (isBusy) nameSuffix = ' <span class="text-blue-500 font-bold text-[10px]">(已在其他隊)</span>';
+            else if (isBusy) nameSuffix = ' <span class="text-blue-500 font-bold text-[10px]">(他隊/替補)</span>';
 
             return `
             <label class="flex items-center space-x-2 p-2 rounded border border-blue-100 transition select-none ${checked ? 'bg-blue-50 border-blue-300' : disabledClass}">
@@ -678,13 +687,13 @@ const App = {
         const id = document.getElementById('squadId').value; const type = document.getElementById('squadType').value; const name = document.getElementById('squadName').value; const note = document.getElementById('squadNote').value; const leaderId = document.getElementById('squadLeader').value; const date = document.getElementById('squadDate').value; const subject = document.getElementById('squadSubject').value; const selectedMembers = [...this.currentSquadMembers];
         if(!name) { alert("請輸入隊伍名稱"); return; } if (type === 'gvg' && !date) { alert("團體戰必須選擇日期"); return; }
         const squadData = { name, note, members: selectedMembers, type, leaderId, date, subject }; 
-        if (id) { if (this.mode === 'firebase') await this.db.collection(COLLECTION_NAMES.GROUPS).doc(id).update(squadData); else { const idx = this.groups.findIndex(g => g.id === id); if(idx !== -1) { this.groups[idx] = { ...this.groups[idx], ...squadData }; this.saveLocal('groups'); } } } 
-        else { if (this.mode === 'firebase') await this.db.collection(COLLECTION_NAMES.GROUPS).add(squadData); else { squadData.id = 'g_' + Date.now(); this.groups.push(squadData); this.saveLocal('groups'); } }
+        if (id) { if (this.mode === 'firebase') await this.db.collection(Cfg.COLLECTION_NAMES.GROUPS).doc(id).update(squadData); else { const idx = this.groups.findIndex(g => g.id === id); if(idx !== -1) { this.groups[idx] = { ...this.groups[idx], ...squadData }; this.saveLocal('groups'); } } } 
+        else { if (this.mode === 'firebase') await this.db.collection(Cfg.COLLECTION_NAMES.GROUPS).add(squadData); else { squadData.id = 'g_' + Date.now(); this.groups.push(squadData); this.saveLocal('groups'); } }
         this.logChange(id ? '隊伍更新' : '建立隊伍', `${name} (${date})`, id || 'new'); this.closeModal('squadModal');
     },
     deleteSquad: async function(id) {
         if (!confirm("確定要解散這個隊伍嗎？")) return;
-        if (this.mode === 'firebase') await this.db.collection(COLLECTION_NAMES.GROUPS).doc(id).delete(); else { this.groups = this.groups.filter(g => g.id !== id); this.saveLocal('groups'); }
+        if (this.mode === 'firebase') await this.db.collection(Cfg.COLLECTION_NAMES.GROUPS).doc(id).delete(); else { this.groups = this.groups.filter(g => g.id !== id); this.saveLocal('groups'); }
         this.closeModal('squadModal');
     },
     renderActivities: function() {
@@ -698,7 +707,7 @@ const App = {
     },
     handleClaimReward: async function(actId, winnerIdx) {
         if(this.userRole !== 'master') return; const actIndex = this.activities.findIndex(a => a.id === actId); if(actIndex === -1) return; let act = this.activities[actIndex]; if(!act.winners[winnerIdx]) return; act.winners[winnerIdx].claimed = true; act.winners[winnerIdx].claimedAt = Date.now(); act.winners[winnerIdx].claimedBy = 'Master';
-        if (this.mode === 'firebase') { await this.db.collection(COLLECTION_NAMES.ACTIVITIES).doc(actId).update({ winners: act.winners }); } else { this.activities[actIndex] = act; this.saveLocal('activities'); }
+        if (this.mode === 'firebase') { await this.db.collection(Cfg.COLLECTION_NAMES.ACTIVITIES).doc(actId).update({ winners: act.winners }); } else { this.activities[actIndex] = act; this.saveLocal('activities'); }
     },
     openActivityModal: function(id) {
         if (this.userRole !== 'master') return; document.getElementById('activityId').value = id || ''; document.getElementById('activityModalTitle').innerText = id ? '編輯' : '新增'; this.currentActivityWinners = [];
@@ -709,11 +718,11 @@ const App = {
     removeWinner: function(idx) { this.currentActivityWinners.splice(idx, 1); this.renderActivityWinnersList(); },
     saveActivity: async function() {
         if (this.userRole !== 'master') return; const id = document.getElementById('activityId').value, name = document.getElementById('activityName').value, note = document.getElementById('activityNote').value; if (!name) { alert("請輸入活動名稱"); return; } const activityData = { name, note, winners: this.currentActivityWinners };
-        if (id) { if (this.mode === 'firebase') await this.db.collection(COLLECTION_NAMES.ACTIVITIES).doc(id).update(activityData); else { const idx = this.activities.findIndex(a => a.id === id); if (idx !== -1) { this.activities[idx] = { ...this.activities[idx], ...activityData }; this.saveLocal('activities'); } } } 
-        else { if (this.mode === 'firebase') await this.db.collection(COLLECTION_NAMES.ACTIVITIES).add(activityData); else { activityData.id = 'act_' + Date.now(); this.activities.push(activityData); this.saveLocal('activities'); } }
+        if (id) { if (this.mode === 'firebase') await this.db.collection(Cfg.COLLECTION_NAMES.ACTIVITIES).doc(id).update(activityData); else { const idx = this.activities.findIndex(a => a.id === id); if (idx !== -1) { this.activities[idx] = { ...this.activities[idx], ...activityData }; this.saveLocal('activities'); } } } 
+        else { if (this.mode === 'firebase') await this.db.collection(Cfg.COLLECTION_NAMES.ACTIVITIES).add(activityData); else { activityData.id = 'act_' + Date.now(); this.activities.push(activityData); this.saveLocal('activities'); } }
         this.closeModal('activityModal'); this.renderActivities();
     },
-    deleteActivity: async function(id) { if (this.userRole !== 'master') return; if (!confirm("確定要刪除此活動嗎？")) return; if (this.mode === 'firebase') await this.db.collection(COLLECTION_NAMES.ACTIVITIES).doc(id).delete(); else { this.activities = this.activities.filter(a => a.id !== id); this.saveLocal('activities'); } this.closeModal('activityModal'); this.renderActivities(); },
+    deleteActivity: async function(id) { if (this.userRole !== 'master') return; if (!confirm("確定要刪除此活動嗎？")) return; if (this.mode === 'firebase') await this.db.collection(Cfg.COLLECTION_NAMES.ACTIVITIES).doc(id).delete(); else { this.activities = this.activities.filter(a => a.id !== id); this.saveLocal('activities'); } this.closeModal('activityModal'); this.renderActivities(); },
     openWinnerSelectionModal: function() { this.tempWinnerSelection = this.currentActivityWinners.map(w => w.memberId); document.getElementById('winnerSearchInput').value = ''; this.renderWinnerMemberSelect(); app.showModal('winnerSelectionModal'); },
     renderWinnerMemberSelect: function() {
         const search = document.getElementById('winnerSearchInput').value.toLowerCase(); let list = [...this.members].sort((a, b) => { const aSel = this.tempWinnerSelection.includes(a.id), bSel = this.tempWinnerSelection.includes(b.id); return (aSel && !bSel) ? -1 : (!aSel && bSel) ? 1 : (a.gameName||'').localeCompare(b.gameName||''); });
