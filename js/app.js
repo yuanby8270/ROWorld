@@ -1,18 +1,13 @@
-// app.js - Final Fix (Variable Conflict Resolved)
+// app.js - Final Version (Unified History Sync)
 
-// --- 1. 確保配置已載入 ---
 if (typeof window.AppConfig === 'undefined') {
-    console.error("Configuration (config.js) not loaded.");
+    console.error("Config not loaded.");
     document.body.innerHTML = '<div style="padding: 50px; text-align: center; color: red;">錯誤：config.js 未載入。</div>';
 }
 
-// 取得全域設定
 const Cfg = window.AppConfig || {};
-
-// [修正] 這裡移除了 FIREBASE_CONFIG 的解構宣告，避免與 config.js 的全域變數衝突
+// 移除重複宣告，直接使用 Cfg
 const { COLLECTION_NAMES, SEED_DATA, SEED_GROUPS, SEED_ACTIVITIES, JOB_STRUCTURE, JOB_STYLES } = Cfg;
-
-// --- 2. 應用程式核心邏輯 ---
 
 const App = {
     db: null, auth: null,
@@ -36,12 +31,11 @@ const App = {
             this.switchTab('home'); 
         } catch (e) {
             console.error("App Init Error:", e);
-            alert("應用程式初始化失敗，請檢查 F12 Console。");
         }
     },
 
     normalizeMemberData: function(m) {
-        const seedIndex = SEED_DATA.findIndex(seed => seed.id === m.id);
+        const seedIndex = Cfg.SEED_DATA.findIndex(seed => seed.id === m.id);
         if (seedIndex !== -1) return { ...m, createdAt: this.BASE_TIME + (seedIndex * 1000) };
         return { ...m, createdAt: m.createdAt || Date.now() };
     },
@@ -57,9 +51,9 @@ const App = {
         const storedHistory = localStorage.getItem('row_mod_history');
         const storedThemes = localStorage.getItem('row_local_themes');
         
-        this.members = storedMem ? JSON.parse(storedMem).map(m => this.normalizeMemberData(m)) : SEED_DATA.map(m => this.normalizeMemberData(m));
-        this.groups = storedGrp ? JSON.parse(storedGrp) : SEED_GROUPS;
-        this.activities = storedAct ? JSON.parse(storedAct) : (SEED_ACTIVITIES || []);
+        this.members = storedMem ? JSON.parse(storedMem).map(m => this.normalizeMemberData(m)) : Cfg.SEED_DATA.map(m => this.normalizeMemberData(m));
+        this.groups = storedGrp ? JSON.parse(storedGrp) : Cfg.SEED_GROUPS;
+        this.activities = storedAct ? JSON.parse(storedAct) : (Cfg.SEED_ACTIVITIES || []);
         this.leaves = storedLeaves ? JSON.parse(storedLeaves) : [];
         this.history = storedHistory ? JSON.parse(storedHistory) : [];
         if (storedThemes) this.raidThemes = JSON.parse(storedThemes);
@@ -73,7 +67,6 @@ const App = {
         const storedConfig = localStorage.getItem('row_firebase_config');
         try { 
             if (storedConfig) config = JSON.parse(storedConfig); 
-            // [修正] 直接從 Cfg 物件讀取，不宣告重複變數
             else if (Cfg.FIREBASE_CONFIG && Cfg.FIREBASE_CONFIG.apiKey) config = Cfg.FIREBASE_CONFIG; 
         } catch (e) {}
 
@@ -91,6 +84,8 @@ const App = {
     syncWithFirebase: function() {
         if (!this.db || this.mode !== 'firebase') return;
         
+        const { COLLECTION_NAMES } = Cfg;
+
         this.db.collection(COLLECTION_NAMES.MEMBERS).onSnapshot(snap => { 
             const rawArr = []; snap.forEach(d => rawArr.push({ id: d.id, ...d.data() })); 
             this.members = this.sortMembers(rawArr.map(m => this.normalizeMemberData(m))); 
@@ -109,12 +104,21 @@ const App = {
 
         this.db.collection('leaves').onSnapshot(snap => {
             const arr = []; 
-            snap.forEach(d => {
-                arr.push({ ...d.data(), id: d.id }); 
-            });
-            this.leaves = arr; 
-            this.saveLocal('leaves'); 
-            this.renderLeaveList(); 
+            snap.forEach(d => { arr.push({ ...d.data(), id: d.id }); });
+            this.leaves = arr; this.saveLocal('leaves'); this.renderLeaveList(); 
+        });
+
+        // [New] 同步歷史紀錄 (統一大家看到的內容)
+        // 限制讀取最近 100 筆，避免載入過多
+        this.db.collection('history').orderBy('timestamp', 'desc').limit(100).onSnapshot(snap => {
+            const arr = [];
+            snap.forEach(d => arr.push(d.data()));
+            this.history = arr;
+            this.saveLocal('history');
+            // 如果歷史紀錄 Modal 是開著的，即時刷新它
+            if(!document.getElementById('historyModal').classList.contains('hidden')) {
+                this.showHistoryModal();
+            }
         });
     },
 
@@ -141,16 +145,26 @@ const App = {
     cleanOldHistory: function() {
         const now = Date.now();
         const cutoff = now - (this.CLEANUP_DAYS * 24 * 60 * 60 * 1000);
-        const originalCount = this.history.length;
+        // 本地清理邏輯 (Firebase 由 Query Limit 控制)
         this.history = this.history.filter(log => log.timestamp >= cutoff);
-        if (this.history.length < originalCount) { this.saveLocal('history'); }
+        // 如果是 Firebase 模式，這裡不做寫入，只做本地狀態清理
+        if (this.mode === 'demo') {
+            this.saveLocal('history');
+        }
     },
     
     logChange: function(action, details, targetId) {
-        this.cleanOldHistory();
         const log = { timestamp: Date.now(), user: this.userRole, action, details, targetId: targetId || 'N/A' };
-        this.history.unshift(log); 
-        this.saveLocal('history'); 
+        
+        if (this.mode === 'firebase') {
+            // [New] 寫入雲端
+            this.db.collection('history').add(log);
+        } else {
+            // Demo 模式寫入本地
+            this.cleanOldHistory();
+            this.history.unshift(log); 
+            this.saveLocal('history'); 
+        }
     },
 
     openLoginModal: function() {
@@ -322,7 +336,7 @@ const App = {
         if (!isPre && !s) { alert("請選擇主題"); return; }
 
         let success = false;
-
+        
         // 取得成員名稱供 Log 使用
         const memName = this.members.find(m => m.id === mid)?.gameName || mid;
 
@@ -394,7 +408,12 @@ const App = {
         container.innerHTML = filtered.map(L => {
             const subMem = L.subId ? this.members.find(m => m.id === L.subId) : null;
             const subText = subMem ? `<span class="text-blue-600"><i class="fas fa-exchange-alt mr-1"></i>替補: ${subMem.gameName}</span>` : (L.source==='pre' ? '-' : '<span class="text-red-400">尚未指定替補</span>');
-            const deleteAction = L.source === 'group' ? `app.cancelLeave('${L.groupId}', '${L.memberId}', '${L.gameName}')` : `app.cancelPreLeave('${L.id}', '${L.gameName}')`;
+            
+            // 傳遞正確參數，包含 Member Name
+            const deleteAction = L.source === 'group' 
+                ? `app.cancelLeave('${L.groupId}', '${L.memberId}', '${L.gameName}')` 
+                : `app.cancelPreLeave('${L.id}', '${L.gameName}')`;
+            
             return `<div class="bg-white p-4 rounded-xl shadow-sm border-l-4 ${L.source==='pre'?'border-l-gray-500':'border-l-orange-500'} flex justify-between items-start relative overflow-hidden"><div class="absolute right-0 top-0 p-2 opacity-10 text-6xl text-orange-200"><i class="fas fa-coffee"></i></div><div class="relative z-10"><div class="flex items-center gap-2 mb-1"><span class="font-bold text-slate-800 text-lg">${L.gameName}</span><span class="text-xs bg-slate-100 text-slate-500 px-2 py-0.5 rounded">${L.mainClass.split('(')[0]}</span></div><div class="text-xs text-slate-500 font-bold mb-1"><span class="bg-slate-100 px-1 rounded mr-1">${L.subject}</span> ${L.groupName}</div><div class="text-sm bg-orange-50 text-orange-800 px-3 py-2 rounded-lg inline-block mb-2"><div class="font-bold flex items-center"><i class="far fa-calendar-alt mr-2"></i>${L.date}</div><div class="text-xs mt-1 opacity-80">${L.note || '無備註'}</div></div><div class="text-xs font-bold bg-white border border-slate-100 rounded px-2 py-1 w-fit shadow-sm">${subText}</div></div><button onclick="${deleteAction}" class="text-slate-300 hover:text-red-500 p-2 transition z-20" title="取消請假"><i class="fas fa-times"></i></button></div>`;
         }).join('');
     },
@@ -416,12 +435,12 @@ const App = {
         if (this.mode === 'firebase') { 
             this.db.collection('leaves').doc(leaveId).delete()
             .then(() => {
-                this.leaves = this.leaves.filter(l => l.id !== leaveId); // 樂觀更新
+                this.leaves = this.leaves.filter(l => l.id !== leaveId); 
                 this.logChange('取消預假', `已取消 ${memberName} 的預先請假`, 'N/A');
                 this.renderLeaveList();
             })
             .catch(err => {
-                alert("刪除失敗 (請確認網路連線): " + err);
+                alert("刪除失敗：" + err);
             });
         } else { 
             this.leaves = this.leaves.filter(l => l.id !== leaveId); 
@@ -539,6 +558,7 @@ const App = {
                                         g.members.forEach(gm => {
                                             const mid = typeof gm === 'string' ? gm : gm.id;
                                             busyIds.push(mid);
+                                            // [Fix] 替補人員選單防呆
                                             if (typeof gm === 'object' && gm.subId) { busyIds.push(gm.subId); }
                                         });
                                     }
@@ -559,6 +579,7 @@ const App = {
                         } 
                         else if (m.subId) { const subMem = this.members.find(x => x.id === m.subId); if (subMem) subUI = `<span class="text-blue-500 text-xs mr-2">⇋ ${subMem.gameName}</span>`; }
                     }
+                    // [Updated] 移除黃燈 onclick 事件，僅保留 title 提示
                     actionUI = `<div class="flex items-center gap-1">${subUI}<div class="gvg-light bg-light-yellow ${m.status === 'leave' ? 'active' : ''}" title="請透過請假單修改狀態"></div><div class="gvg-light ${m.status === 'ready' ? 'bg-light-green active' : 'bg-light-red'}" title="狀態" onclick="event.stopPropagation(); app.toggleGvgStatus('${group.id}', '${m.id}', 'ready_toggle')"></div></div>`;
                 } else { actionUI = `<span class="text-xs text-slate-300 font-mono">ID:${m.id.slice(-3)}</span>`; }
                 return `<div class="flex items-center justify-between text-sm py-2.5 border-b border-slate-100 last:border-0 hover:bg-slate-50 px-3 transition ${rowClass}"><div class="flex items-center gap-3 min-w-0"><div class="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-xs font-bold ${roleColor}">${m.role.substring(0,1)}</div><div class="flex flex-col min-w-0"><span class="text-slate-800 font-bold truncate member-name">${m.gameName}</span><span class="text-[10px] text-slate-400 font-mono">${job}</span></div></div>${actionUI}</div>`;
@@ -627,6 +648,7 @@ const App = {
     },
     toggleSquadMember: function(id) { const index = this.currentSquadMembers.findIndex(m => m.id === id); const limit = this.currentTab === 'gvg' ? 5 : 12; if (index > -1) { this.currentSquadMembers.splice(index, 1); } else { if (this.currentSquadMembers.length >= limit) { alert(`此類型隊伍最多 ${limit} 人`); return; } this.currentSquadMembers.push({ id: id, status: 'pending' }); } this.renderSquadMemberSelect(); },
     
+    // [Updated] 選人防呆：當日已請假者 OR 當日已在其他隊伍者 OR *當日已是其他隊伍替補者* -> 變灰無法選取
     renderSquadMemberSelect: function() {
         const search = document.getElementById('memberSearch').value.toLowerCase(); 
         const targetDate = document.getElementById('squadDate').value;
@@ -635,8 +657,10 @@ const App = {
 
         let availableMembers = [...this.members];
         
+        // 1. 找出當日「預先請假」的人員
         const preLeaveMembers = this.leaves.filter(l => l.date === targetDate).map(l => l.memberId);
 
+        // 2. 找出當日「已在其他隊伍」的人員 (僅針對 GVG 類型)
         let busyMembers = [];
         if (currentType === 'gvg' && targetDate) {
             this.groups.forEach(g => {
@@ -644,6 +668,7 @@ const App = {
                     g.members.forEach(m => {
                         const mid = typeof m === 'string' ? m : m.id;
                         busyMembers.push(mid);
+                        // [New Check] 如果這個人有替補，替補也要算忙碌
                         if (typeof m === 'object' && m.subId) {
                             busyMembers.push(m.subId);
                         }
@@ -660,6 +685,7 @@ const App = {
             const checked = isSelected(m.id); 
             const style = Cfg.JOB_STYLES.find(s => s.key.some(k => (m.mainClass||'').includes(k))) || { class: 'bg-job-default', icon: 'fa-user' }; 
             
+            // 防呆邏輯判斷
             const isLeave = preLeaveMembers.includes(m.id);
             const isBusy = busyMembers.includes(m.id);
             const isUnavailable = isLeave || isBusy;
