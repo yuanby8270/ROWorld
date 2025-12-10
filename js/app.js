@@ -1,4 +1,4 @@
-// app.js
+// app.js - Part 1
 
 // --- 1. 確保配置已載入 ---
 if (typeof window.AppConfig === 'undefined') {
@@ -14,6 +14,9 @@ const { FIREBASE_CONFIG, COLLECTION_NAMES, SEED_DATA, SEED_GROUPS, SEED_ACTIVITI
 const App = {
     db: null, auth: null,
     members: [], groups: [], activities: [], history: [],
+    // [New] 預設團體戰主題
+    raidThemes: ['GVG 攻城戰', '公會副本', '野外王'],
+    
     currentTab: 'home', 
     currentFilter: 'all', currentJobFilter: 'all', 
     currentSquadRoleFilter: 'all', 
@@ -21,7 +24,7 @@ const App = {
     mode: 'demo', userRole: 'guest',
     currentSquadMembers: [], currentActivityWinners: [], tempWinnerSelection: [],
 
-    // 定義基準時間：2023/1/1 (用於鎖定元老成員順序)
+    // 定義基準時間：2023/1/1
     BASE_TIME: new Date('2023-01-01').getTime(),
 
     init: async function() {
@@ -32,7 +35,6 @@ const App = {
         this.switchTab('home');
     },
 
-    // --- 資料標準化函數 ---
     normalizeMemberData: function(m) {
         const seedIndex = SEED_DATA.findIndex(seed => seed.id === m.id);
         if (seedIndex !== -1) {
@@ -50,13 +52,15 @@ const App = {
         const storedGrp = localStorage.getItem('row_local_groups');
         const storedAct = localStorage.getItem('row_local_activities');
         const storedHistory = localStorage.getItem('row_mod_history');
-        
+        const storedThemes = localStorage.getItem('row_local_themes');
+
         let rawMembers = storedMem ? JSON.parse(storedMem) : SEED_DATA;
         this.members = rawMembers.map(m => this.normalizeMemberData(m));
 
         this.groups = storedGrp ? JSON.parse(storedGrp) : SEED_GROUPS;
         this.activities = storedAct ? JSON.parse(storedAct) : (SEED_ACTIVITIES || []);
         this.history = storedHistory ? JSON.parse(storedHistory) : [];
+        if (storedThemes) this.raidThemes = JSON.parse(storedThemes);
         
         this.members = this.sortMembers(this.members);
     },
@@ -123,6 +127,7 @@ const App = {
             if (key === 'members' || key === 'all') localStorage.setItem('row_local_members', JSON.stringify(this.members));
             if (key === 'groups' || key === 'all') localStorage.setItem('row_local_groups', JSON.stringify(this.groups));
             if (key === 'activities' || key === 'all') localStorage.setItem('row_local_activities', JSON.stringify(this.activities));
+            if (key === 'themes' || key === 'all') localStorage.setItem('row_local_themes', JSON.stringify(this.raidThemes));
             localStorage.setItem('row_mod_history', JSON.stringify(this.history));
             this.render();
         }
@@ -164,6 +169,12 @@ const App = {
         const rankSelect = document.getElementById('rank'), lockIcon = document.getElementById('rankLockIcon');
         if (this.userRole === 'master') { if (rankSelect) rankSelect.disabled = false; if (lockIcon) lockIcon.className = "fas fa-unlock text-blue-500 text-xs ml-2"; } 
         else { if (rankSelect) rankSelect.disabled = true; if (lockIcon) lockIcon.className = "fas fa-lock text-slate-300 text-xs ml-2"; }
+        
+        const addSubBtn = document.getElementById('addSubjectBtn');
+        if (addSubBtn) {
+            if (this.userRole === 'master') addSubBtn.classList.remove('hidden');
+            else addSubBtn.classList.add('hidden');
+        }
         this.render();
     },
 
@@ -181,7 +192,6 @@ const App = {
         document.querySelectorAll('.nav-pill').forEach(b => b.classList.remove('active'));
         const activeBtn = document.getElementById('tab-' + tab); if(activeBtn) activeBtn.classList.add('active');
 
-        // 權限檢查 & 初始化
         const adminWarning = document.getElementById('adminWarning');
         if (tab === 'gvg' && !['master', 'admin', 'commander'].includes(this.userRole)) { if(adminWarning) adminWarning.classList.remove('hidden'); } 
         else { if(adminWarning) adminWarning.classList.add('hidden'); }
@@ -193,12 +203,11 @@ const App = {
             else { if(addActivityBtn) addActivityBtn.classList.add('hidden'); if(activityWarning) activityWarning.classList.remove('hidden'); }
         }
 
-        // Leave Tab Init
         if (tab === 'leave') {
             this.initLeaveForm();
         }
 
-        if(tab === 'gvg') { document.getElementById('groupViewTitle').innerText = 'GVG 攻城戰分組'; document.getElementById('squadModalTitle').innerText = 'GVG 分組管理'; } 
+        if(tab === 'gvg') { document.getElementById('groupViewTitle').innerText = '團體戰分組'; document.getElementById('squadModalTitle').innerText = '團體戰管理'; } 
         else if(tab === 'groups') { document.getElementById('groupViewTitle').innerText = '固定團列表'; document.getElementById('squadModalTitle').innerText = '固定團管理'; }
         this.render();
     },
@@ -222,88 +231,164 @@ const App = {
         const cnt = document.querySelector('#view-home .ro-menu-btn .ro-btn-content p'); if (cnt) cnt.innerText = `Guild Members (${this.members.length})`;
     },
 
-    // --- 請假管理邏輯 (Leave Management Optimized) ---
+    // --- 請假管理邏輯 (NEW: 日期 -> 主題 -> 人員) ---
     
     toggleLeaveForm: function() {
-        const el = document.getElementById('leaveFormContainer');
-        el.classList.toggle('hidden');
+        document.getElementById('leaveFormContainer').classList.toggle('hidden');
     },
 
     initLeaveForm: function() {
-        const raidSelect = document.getElementById('leaveRaidSelect');
-        const memberSelect = document.getElementById('leaveMemberSelect');
         const dateInput = document.getElementById('leaveDateInput');
+        const subjectSelect = document.getElementById('leaveSubjectSelect');
+        const memberSelect = document.getElementById('leaveMemberSelect');
         const noteInput = document.getElementById('leaveNote');
         
-        // Reset Form
-        raidSelect.innerHTML = '<option value="" disabled selected>選擇隊伍...</option>';
-        memberSelect.innerHTML = '<option value="">先選隊伍</option>';
-        memberSelect.disabled = true;
-        dateInput.value = new Date().toISOString().split('T')[0]; // 預設今天
+        dateInput.value = new Date().toISOString().split('T')[0];
         noteInput.value = '';
         
-        document.getElementById('leaveFormContainer').classList.add('hidden'); // 預設隱藏
+        subjectSelect.innerHTML = '<option value="" disabled selected>請先選日期</option>';
+        subjectSelect.disabled = true;
+        memberSelect.innerHTML = '<option value="" disabled selected>請先選主題</option>';
+        memberSelect.disabled = true;
+
+        document.getElementById('leaveFormContainer').classList.add('hidden');
         document.getElementById('leaveSuccessMsg').classList.add('hidden');
+        
+        const filterSubject = document.getElementById('leaveFilterSubject');
+        if(filterSubject) filterSubject.innerHTML = '<option value="">所有主題</option>' + this.raidThemes.map(t => `<option value="${t}">${t}</option>`).join('');
 
-        // Populate Raids (只列出 GVG 隊伍)
-        const gvgGroups = this.groups.filter(g => g.type === 'gvg');
-        gvgGroups.forEach(g => {
-            raidSelect.innerHTML += `<option value="${g.id}">GVG - ${g.name}</option>`;
-        });
-
-        // 渲染下方的請假列表
+        this.updateLeaveSubjectSelect();
         this.renderLeaveList();
     },
 
-    updateLeaveMemberSelect: function() {
-        const raidSelect = document.getElementById('leaveRaidSelect');
+    updateLeaveSubjectSelect: function() {
+        const date = document.getElementById('leaveDateInput').value;
+        const subjectSelect = document.getElementById('leaveSubjectSelect');
         const memberSelect = document.getElementById('leaveMemberSelect');
-        const groupId = raidSelect.value;
+        
+        subjectSelect.innerHTML = '<option value="" disabled selected>請選擇主題...</option>';
+        memberSelect.innerHTML = '<option value="" disabled selected>請先選主題</option>';
+        memberSelect.disabled = true;
+
+        if (!date) { subjectSelect.disabled = true; return; }
+
+        const activeSubjects = new Set();
+        this.groups.filter(g => g.type === 'gvg' && g.date === date).forEach(g => {
+            if (g.subject) activeSubjects.add(g.subject);
+        });
+
+        if (activeSubjects.size === 0) {
+            subjectSelect.innerHTML = '<option value="" disabled selected>該日無活動</option>';
+            subjectSelect.disabled = true;
+        } else {
+            activeSubjects.forEach(sub => {
+                subjectSelect.innerHTML += `<option value="${sub}">${sub}</option>`;
+            });
+            subjectSelect.disabled = false;
+        }
+    },
+
+    updateLeaveMemberSelect: function() {
+        const date = document.getElementById('leaveDateInput').value;
+        const subject = document.getElementById('leaveSubjectSelect').value;
+        const memberSelect = document.getElementById('leaveMemberSelect');
         
         memberSelect.innerHTML = '<option value="" disabled selected>選擇人員...</option>';
         
-        const group = this.groups.find(g => g.id === groupId);
-        if (!group) {
-            memberSelect.disabled = true;
-            return;
-        }
+        if (!date || !subject) { memberSelect.disabled = true; return; }
 
-        memberSelect.disabled = false;
-        group.members.forEach(m => {
-            const mid = typeof m === 'string' ? m : m.id;
-            const mem = this.members.find(x => x.id === mid);
-            if (mem) {
-                const currentStatus = (typeof m === 'object' && m.status === 'leave') ? '(已請假)' : '';
-                memberSelect.innerHTML += `<option value="${mid}">${mem.gameName} ${currentStatus}</option>`;
-            }
+        const targetGroups = this.groups.filter(g => g.type === 'gvg' && g.date === date && g.subject === subject);
+        
+        const validMembers = new Set();
+        targetGroups.forEach(g => {
+            g.members.forEach(m => {
+                const mid = typeof m === 'string' ? m : m.id;
+                validMembers.add(mid);
+            });
         });
+
+        if (validMembers.size === 0) {
+            memberSelect.disabled = true;
+        } else {
+            memberSelect.disabled = false;
+            validMembers.forEach(mid => {
+                const mem = this.members.find(x => x.id === mid);
+                if (mem) {
+                    let isLeave = false;
+                    for(let g of targetGroups) {
+                         const mObj = g.members.find(gm => (typeof gm === 'string' ? gm : gm.id) === mid);
+                         if (typeof mObj === 'object' && mObj.status === 'leave') isLeave = true;
+                    }
+                    memberSelect.innerHTML += `<option value="${mid}">${mem.gameName} ${isLeave ? '(已請假)' : ''}</option>`;
+                }
+            });
+        }
     },
 
-    // 新增：渲染請假列表 (含搜尋與篩選)
+    handleLeaveSubmit: function() {
+        const date = document.getElementById('leaveDateInput').value;
+        const subject = document.getElementById('leaveSubjectSelect').value;
+        const memberId = document.getElementById('leaveMemberSelect').value;
+        const note = document.getElementById('leaveNote').value;
+
+        if (!date || !subject || !memberId) { alert("請完整填寫"); return; }
+
+        const targetGroups = this.groups.filter(g => g.type === 'gvg' && g.date === date && g.subject === subject);
+        
+        let updated = false;
+        targetGroups.forEach(group => {
+            const idx = group.members.findIndex(m => (typeof m === 'string' ? m : m.id) === memberId);
+            if (idx !== -1) {
+                let m = group.members[idx];
+                if (typeof m === 'string') {
+                    m = { id: m, status: 'leave', subId: null, leaveDate: date, leaveNote: note };
+                } else {
+                    m.status = 'leave';
+                    m.leaveDate = date;
+                    m.leaveNote = note;
+                }
+                group.members[idx] = m;
+                this.saveGroupUpdate(group); 
+                updated = true;
+            }
+        });
+
+        if (updated) {
+            this.logChange('新增請假', `${date} ${subject} - ${note}`, memberId);
+            const msg = document.getElementById('leaveSuccessMsg');
+            msg.classList.remove('hidden');
+            setTimeout(() => msg.classList.add('hidden'), 3000);
+            this.toggleLeaveForm();
+            this.renderLeaveList();
+        } else {
+            alert("發生錯誤：找不到該成員所在的隊伍");
+        }
+    },
+
     renderLeaveList: function() {
         const container = document.getElementById('leaveListGrid');
         const noMsg = document.getElementById('noLeaveMsg');
         const searchName = document.getElementById('leaveSearch').value.toLowerCase();
         const filterDate = document.getElementById('leaveFilterDate').value;
+        const filterSubject = document.getElementById('leaveFilterSubject').value;
 
         let allLeaves = [];
 
-        // 1. 收集所有請假資料
         this.groups.forEach(g => {
-            if (!g.members) return;
+            if (!g.members || g.type !== 'gvg') return; 
             g.members.forEach(m => {
                 const isObj = typeof m !== 'string';
-                // 判斷是否請假
                 if (isObj && m.status === 'leave') {
                     const memProfile = this.members.find(x => x.id === m.id);
                     if (memProfile) {
                         allLeaves.push({
                             groupId: g.id,
                             groupName: g.name,
+                            subject: g.subject || 'GVG 攻城戰', 
+                            date: g.date || '未設定', 
                             memberId: memProfile.id,
                             gameName: memProfile.gameName,
                             mainClass: memProfile.mainClass,
-                            date: m.leaveDate || '未填寫',
                             note: m.leaveNote || '',
                             subId: m.subId
                         });
@@ -312,17 +397,15 @@ const App = {
             });
         });
 
-        // 2. 篩選
         const filtered = allLeaves.filter(L => {
             const matchName = L.gameName.toLowerCase().includes(searchName);
             const matchDate = filterDate ? (L.date === filterDate) : true;
-            return matchName && matchDate;
+            const matchSubject = filterSubject ? (L.subject === filterSubject) : true;
+            return matchName && matchDate && matchSubject;
         });
 
-        // 3. 排序 (日期近的在上面)
         filtered.sort((a, b) => new Date(b.date) - new Date(a.date));
 
-        // 4. 更新 UI
         document.getElementById('leaveCountBadge').innerText = `${filtered.length} 人`;
         
         if (filtered.length === 0) {
@@ -344,8 +427,8 @@ const App = {
                         <span class="font-bold text-slate-800 text-lg">${L.gameName}</span>
                         <span class="text-xs bg-slate-100 text-slate-500 px-2 py-0.5 rounded">${L.mainClass.split('(')[0]}</span>
                     </div>
-                    <div class="text-xs text-slate-500 font-bold mb-2">
-                        <i class="fas fa-shield-alt text-slate-400 mr-1"></i>${L.groupName}
+                    <div class="text-xs text-slate-500 font-bold mb-1">
+                        <span class="bg-slate-100 px-1 rounded mr-1">${L.subject}</span> ${L.groupName}
                     </div>
                     <div class="text-sm bg-orange-50 text-orange-800 px-3 py-2 rounded-lg inline-block mb-2">
                         <div class="font-bold flex items-center"><i class="far fa-calendar-alt mr-2"></i>${L.date}</div>
@@ -358,12 +441,10 @@ const App = {
                 <button onclick="app.cancelLeave('${L.groupId}', '${L.memberId}')" class="text-slate-300 hover:text-red-500 p-2 transition z-20" title="取消請假">
                     <i class="fas fa-times"></i>
                 </button>
-            </div>
-            `;
+            </div>`;
         }).join('');
     },
 
-    // 新增：取消請假
     cancelLeave: function(groupId, memberId) {
         if (!confirm("確定要取消此請假紀錄，讓成員回歸隊伍嗎？")) return;
         
@@ -373,63 +454,16 @@ const App = {
         const idx = group.members.findIndex(m => (typeof m === 'string' ? m : m.id) === memberId);
         if (idx === -1) return;
 
-        // 恢復狀態
         let m = group.members[idx];
         m.status = 'pending'; 
         m.leaveDate = null;
         m.leaveNote = null;
-        // 不清空 subId，保留彈性
         
         group.members[idx] = m;
         this.saveGroupUpdate(group);
         this.renderLeaveList(); 
     },
-
-    handleLeaveSubmit: function() {
-        const groupId = document.getElementById('leaveRaidSelect').value;
-        const memberId = document.getElementById('leaveMemberSelect').value;
-        const date = document.getElementById('leaveDateInput').value;
-        const note = document.getElementById('leaveNote').value;
-        
-        if (!groupId || !memberId || !date) {
-            alert("請完整填寫：隊伍、日期與人員。");
-            return;
-        }
-
-        const group = this.groups.find(g => g.id === groupId);
-        if (!group) return;
-
-        const index = group.members.findIndex(m => (typeof m === 'string' ? m : m.id) === memberId);
-        if (index === -1) {
-            alert("該成員不在選擇的隊伍中！");
-            return;
-        }
-
-        // 連動邏輯：直接更新 Group 成員狀態
-        let m = group.members[index];
-        if (typeof m === 'string') {
-            m = { id: m, status: 'leave', subId: null, leaveDate: date, leaveNote: note };
-        } else {
-            m.status = 'leave';
-            m.leaveDate = date;
-            m.leaveNote = note;
-        }
-        
-        group.members[index] = m;
-        
-        this.saveGroupUpdate(group);
-        this.logChange('新增請假', `${date} - ${note}`, memberId);
-
-        // UI 反饋
-        const msg = document.getElementById('leaveSuccessMsg');
-        msg.classList.remove('hidden');
-        setTimeout(() => msg.classList.add('hidden'), 3000);
-        
-        this.toggleLeaveForm(); // 收起表單
-        this.renderLeaveList(); // 更新列表
-    },
-
-    // --- 成員相關邏輯 (保持不變) ---
+// --- 成員相關邏輯 ---
     renderMembers: function() {
         const grid = document.getElementById('memberGrid');
         const searchVal = document.getElementById('searchInput').value.toLowerCase();
@@ -478,7 +512,6 @@ const App = {
             </div>`;
     },
 
-    // Filter & Job & Modal Logic
     setFilter: function(f) { this.currentFilter = f; document.querySelectorAll('.filter-btn').forEach(b => b.className = (b.innerText.includes(f==='all'?'全部':f)||(f==='坦'&&b.innerText.includes('坦克'))||(f==='待定'&&b.innerText.includes('待定'))) ? "px-4 py-1.5 rounded-full text-sm font-bold bg-slate-800 text-white transition whitespace-nowrap filter-btn active shadow-md" : "px-4 py-1.5 rounded-full text-sm font-bold bg-white text-slate-600 border border-slate-200 hover:bg-blue-50 transition whitespace-nowrap filter-btn"); this.renderMembers(); },
     setJobFilter: function(j) { this.currentJobFilter = j; this.renderMembers(); },
     
@@ -652,7 +685,7 @@ const App = {
         this.closeModal('editModal');
     },
 
-    // --- 3. 固定團 / GVG 邏輯 ---
+    // --- 3. 團體戰 / GVG 邏輯 (Updated) ---
 
     renderSquads: function() {
         const type = this.currentTab === 'gvg' ? 'gvg' : 'groups';
@@ -786,7 +819,19 @@ const App = {
                 </div>`;
             }
 
-            return `<div class="${cardClass} flex flex-col h-full overflow-hidden"><div class="${headerClass} p-4 flex justify-between items-center rounded-t-[7px]"><div><h3 class="text-xl font-bold">${group.name}</h3><p class="text-xs mt-1 italic opacity-80">${group.note||''}</p></div><div class="flex items-center">${copyBtn}${editBtn}</div></div><div class="flex-grow p-1 overflow-y-auto max-h-80">${list.length?list:'<p class="text-sm text-slate-400 text-center py-4">無成員 (或被篩選隱藏)</p>'}</div>${footer}</div>`;
+            // [Updated] 顯示日期與主題 Badges
+            const dateBadge = group.date ? `<span class="text-[10px] bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full mr-2"><i class="far fa-calendar-alt mr-1"></i>${group.date}</span>` : '';
+            const subjectBadge = group.subject ? `<span class="text-[10px] bg-purple-100 text-purple-800 px-2 py-0.5 rounded-full"><i class="fas fa-tag mr-1"></i>${group.subject}</span>` : '';
+
+            return `<div class="${cardClass} flex flex-col h-full overflow-hidden">
+                <div class="${headerClass} p-4 flex justify-between items-center rounded-t-[7px]">
+                    <div>
+                        <div class="flex items-center mb-1">${dateBadge}${subjectBadge}</div>
+                        <h3 class="text-xl font-bold">${group.name}</h3><p class="text-xs mt-1 italic opacity-80">${group.note||''}</p>
+                    </div>
+                    <div class="flex items-center">${copyBtn}${editBtn}</div>
+                </div>
+                <div class="flex-grow p-1 overflow-y-auto max-h-80">${list.length?list:'<p class="text-sm text-slate-400 text-center py-4">無成員 (或被篩選隱藏)</p>'}</div>${footer}</div>`;
         }).join('');
         grid.insertAdjacentHTML('beforeend', groupsHTML);
     },
@@ -826,6 +871,24 @@ const App = {
         else this.saveLocal('groups');
     },
     
+    // [New] 新增自訂主題
+    addCustomSubject: function() {
+        const newSub = prompt("請輸入新主題名稱：");
+        if (newSub && !this.raidThemes.includes(newSub)) {
+            this.raidThemes.push(newSub);
+            this.saveLocal('themes');
+            this.renderSubjectOptions(newSub);
+        }
+    },
+
+    // 渲染 Modal 中的主題選單
+    renderSubjectOptions: function(selectedVal) {
+        const select = document.getElementById('squadSubject');
+        if (!select) return;
+        select.innerHTML = this.raidThemes.map(t => `<option value="${t}">${t}</option>`).join('');
+        if (selectedVal) select.value = selectedVal;
+    },
+
     openSquadModal: function(id) {
         const type = this.currentTab === 'gvg' ? 'gvg' : 'groups';
         if(!['master', 'admin', 'commander'].includes(this.userRole)) return; 
@@ -859,21 +922,27 @@ const App = {
             `).join('');
             searchInput.parentNode.insertAdjacentElement('afterend', filterDiv);
         }
+        
+        // 載入主題選項
+        this.renderSubjectOptions();
 
         if(id) {
             const g = this.groups.find(g => g.id === id);
             document.getElementById('squadName').value = g.name; document.getElementById('squadNote').value = g.note;
+            document.getElementById('squadDate').value = g.date || ''; // [New]
+            document.getElementById('squadSubject').value = g.subject || 'GVG 攻城戰'; // [New]
             document.getElementById('deleteSquadBtnContainer').innerHTML = `<button type="button" onclick="app.deleteSquad('${id}')" class="text-red-500 text-sm hover:underline">解散</button>`;
             
             this.currentSquadMembers = g.members.map(m => typeof m === 'string' ? {id: m, status: 'pending'} : m);
             this.renderSquadMemberSelect(); 
+            this.updateLeaderOptions(); // [Fixed]
             
             const leaderSelect = document.getElementById('squadLeader');
-            if(leaderSelect) {
-                leaderSelect.value = g.leaderId || "";
-            }
+            if(leaderSelect) leaderSelect.value = g.leaderId || "";
         } else {
             document.getElementById('squadName').value = ''; document.getElementById('squadNote').value = '';
+            document.getElementById('squadDate').value = new Date().toISOString().split('T')[0]; // [New]
+            document.getElementById('squadSubject').value = 'GVG 攻城戰';
             document.getElementById('deleteSquadBtnContainer').innerHTML = '';
             this.currentSquadMembers = [];
             this.renderSquadMemberSelect();
@@ -964,12 +1033,14 @@ const App = {
         const name = document.getElementById('squadName').value;
         const note = document.getElementById('squadNote').value;
         const leaderId = document.getElementById('squadLeader').value; 
+        const date = document.getElementById('squadDate').value;
+        const subject = document.getElementById('squadSubject').value;
         const selectedMembers = [...this.currentSquadMembers];
         
         if(!name) { alert("請輸入隊伍名稱"); return; }
-        if (type === 'gvg' && selectedMembers.length !== 5) { alert("GVG 隊伍建議為 5 人 (目前: " + selectedMembers.length + ")"); }
+        if (type === 'gvg' && !date) { alert("團體戰必須選擇日期"); return; }
         
-        const squadData = { name, note, members: selectedMembers, type, leaderId }; 
+        const squadData = { name, note, members: selectedMembers, type, leaderId, date, subject }; 
         if (id) {
             if (this.mode === 'firebase') await this.db.collection(COLLECTION_NAMES.GROUPS).doc(id).update(squadData); 
             else { const idx = this.groups.findIndex(g => g.id === id); if(idx !== -1) { this.groups[idx] = { ...this.groups[idx], ...squadData }; this.saveLocal('groups'); } }
@@ -977,7 +1048,7 @@ const App = {
             if (this.mode === 'firebase') await this.db.collection(COLLECTION_NAMES.GROUPS).add(squadData); 
             else { squadData.id = 'g_' + Date.now(); this.groups.push(squadData); this.saveLocal('groups'); }
         }
-        this.logChange(id ? '隊伍更新' : '建立隊伍', `${name}`, id || 'new'); this.closeModal('squadModal');
+        this.logChange(id ? '隊伍更新' : '建立隊伍', `${name} (${date})`, id || 'new'); this.closeModal('squadModal');
     },
 
     deleteSquad: async function(id) {
@@ -1109,7 +1180,7 @@ const App = {
         this.closeModal('activityModal'); this.renderActivities();
     },
 
-    // --- Winner Selection Utils (保持不變) ---
+    // --- Winner Selection Utils ---
     openWinnerSelectionModal: function() { this.tempWinnerSelection = this.currentActivityWinners.map(w => w.memberId); document.getElementById('winnerSearchInput').value = ''; this.renderWinnerMemberSelect(); app.showModal('winnerSelectionModal'); },
     renderWinnerMemberSelect: function() {
         const search = document.getElementById('winnerSearchInput').value.toLowerCase();
@@ -1143,17 +1214,14 @@ const App = {
         this.showModal('historyModal');
     },
     
-    // 複製邏輯 (智慧替補替換 + 隊長顯示)
     copyText: function(el, text) { navigator.clipboard.writeText(text).then(() => { el.classList.add('copied'); setTimeout(() => el.classList.remove('copied'), 1500); }).catch(() => alert("複製失敗")); },
     copySquadList: function(gid) {
         let id = gid || document.getElementById('squadId').value; if(!id) return;
         const g = this.groups.find(g => g.id === id);
         
-        // 取得隊長名稱
         const leaderMem = g.leaderId ? this.members.find(m => m.id === g.leaderId) : null;
         const leaderName = leaderMem ? leaderMem.gameName : '未指定';
 
-        // 標題格式更新
         let txt = `【${g.name}】 - 隊長：${leaderName}\n`;
         
         txt += g.members.map(m => {
