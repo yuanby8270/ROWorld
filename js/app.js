@@ -363,7 +363,7 @@ const App = {
         this.logChange('成員刪除', `ID: ${id}`, id); this.closeModal('editModal');
     },
 
-   renderSquads: function() {
+renderSquads: function() {
         const type = this.currentTab === 'gvg' ? 'gvg' : 'groups';
         const search = document.getElementById('groupSearchInput').value.toLowerCase();
         const canEdit = ['master', 'admin', 'commander'].includes(this.userRole);
@@ -398,13 +398,17 @@ const App = {
             const isGVG = type === 'gvg';
             
             const list = groupMembers.map(m => {
-                // 職業篩選
                 if (this.currentSquadRoleFilter !== 'all') { const filterKey = this.currentSquadRoleFilter; const match = m.role.includes(filterKey) || (filterKey === '坦' && m.mainClass.includes('坦')); if (!match) return ''; }
                 
                 const job = (m.mainClass || '').split('(')[0]; 
-                // [修復] 這裡決定左側邊框顏色
-                const borderColor = m.role.includes('輸出') ? 'border-l-red-400' : m.role.includes('坦') ? 'border-l-blue-400' : 'border-l-green-400';
-                const roleColor = m.role.includes('輸出') ? 'text-red-500' : m.role.includes('輔助') ? 'text-green-500' : 'text-blue-500';
+                
+                // [修復] 這裡優化了顏色邏輯，並確保不會被 CSS 蓋掉
+                let borderColor = 'border-l-slate-300'; // 預設灰色 (待定)
+                let roleColor = 'text-slate-400';
+
+                if (m.role.includes('輸出')) { borderColor = 'border-l-red-400'; roleColor = 'text-red-500'; }
+                else if (m.role.includes('坦')) { borderColor = 'border-l-blue-400'; roleColor = 'text-blue-500'; }
+                else if (m.role.includes('輔助')) { borderColor = 'border-l-green-400'; roleColor = 'text-green-500'; }
 
                 let actionUI = "", rowClass = "";
                 
@@ -413,7 +417,6 @@ const App = {
                     let subUI = "";
                     if (m.status === 'leave') {
                         if (canEdit) { 
-                            // 替補邏輯 (省略細節以保持簡潔，同原版)
                             let busyIds = [];
                             if (group.date) {
                                 this.groups.forEach(g => {
@@ -431,8 +434,9 @@ const App = {
                     actionUI = `<div class="flex items-center gap-2">${subUI}<div class="gvg-light bg-light-yellow ${m.status === 'leave' ? 'active' : ''}" title="請假"></div><div class="gvg-light ${m.status === 'ready' ? 'bg-light-green active' : 'bg-light-red'}" title="狀態" onclick="event.stopPropagation(); app.toggleGvgStatus('${group.id}', '${m.id}', 'ready_toggle')"></div></div>`;
                 } else { actionUI = `<span class="text-xs text-slate-300 font-mono">ID:${m.id.slice(-3)}</span>`; }
 
-                // [修復] 在這裡加入 border-l-4 和 borderColor
-                return `<div class="flex items-center justify-between text-sm py-2.5 border-b border-slate-100 last:border-0 hover:bg-slate-50 px-3 transition border-l-4 ${borderColor} ${rowClass}">
+                // [重點修復] 將 last:border-0 改為 last:border-b-0
+                // 這樣最後一個成員只會移除「底部」分隔線，而不會移除「左邊」的顏色條
+                return `<div class="flex items-center justify-between text-sm py-2.5 border-b border-slate-100 last:border-b-0 hover:bg-slate-50 px-3 transition border-l-4 ${borderColor} ${rowClass}">
                     <div class="flex items-center gap-3 min-w-0">
                         <div class="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-xs font-bold ${roleColor}">${m.role.substring(0,1)}</div>
                         <div class="flex flex-col min-w-0">
@@ -445,7 +449,7 @@ const App = {
             }).join('');
 
             const headerClass = isGVG ? 'squad-card-gvg-header' : 'bg-blue-50 p-4 border-b border-blue-100';
-            const cardClass = isGVG ? 'squad-card-gvg' : 'bg-white rounded-xl shadow-sm border border-blue-100 flex flex-col h-full'; // 確保兩種卡片都 flex flex-col
+            const cardClass = isGVG ? 'squad-card-gvg' : 'bg-white rounded-xl shadow-sm border border-blue-100 flex flex-col h-full'; 
             const editBtn = canEdit ? `<button onclick="app.openSquadModal('${group.id}')" class="text-slate-400 hover:text-blue-600 p-1"><i class="fas fa-cog"></i></button>` : '';
             const copyBtn = `<button onclick="app.copySquadList('${group.id}')" class="text-slate-400 hover:text-green-600 p-1 ml-2" title="複製隊伍"><i class="fas fa-copy"></i></button>`;
             const leader = group.leaderId ? (this.members.find(m => m.id === group.leaderId)?.gameName || '未知') : '未指定';
