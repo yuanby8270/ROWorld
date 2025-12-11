@@ -8,14 +8,21 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="theme-color" content="#e2e8f0">
+    
     <link href="https://fonts.googleapis.com/css2?family=ZCOOL+KuaiLe&family=Varela+Round&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
     <script src="https://cdn.tailwindcss.com"></script>
+    
     <link rel="stylesheet" href="./css/styles.css"> 
+
     <script>
         tailwind.config = {
             theme: {
-                extend: { colors: { ro: { primary: '#3b82f6', bg: '#eff6ff' } }, fontFamily: { 'cute': ['"ZCOOL KuaiLe"', 'cursive'], 'sans': ['-apple-system', 'BlinkMacSystemFont', '"Segoe UI"', 'Roboto', 'sans-serif'] } }
+                extend: { 
+                    colors: { ro: { primary: '#3b82f6', bg: '#eff6ff' } }, 
+                    fontFamily: { 'cute': ['"ZCOOL KuaiLe"', 'cursive'], 'sans': ['-apple-system', 'BlinkMacSystemFont', '"Segoe UI"', 'Roboto', 'sans-serif'] } 
+                }
             }
         };
     </script>
@@ -91,7 +98,8 @@
             <div class="flex justify-between text-xs text-slate-400 mb-2 px-2 font-mono font-bold"><span id="memberCount">Total: 0</span><div class="space-x-2"><span>DPS: <span id="stat-dps" class="text-red-500">0</span></span><span>SUP: <span id="stat-sup" class="text-green-500">0</span></span><span>TNK: <span id="stat-tank" class="text-blue-500">0</span></span></div></div>
             <div id="memberGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3"></div>
         </div>
-<div id="view-leave" class="animate-fade-in hidden">
+
+        <div id="view-leave" class="animate-fade-in hidden">
             <div class="flex justify-between items-center mb-4">
                 <h2 class="text-xl font-bold text-slate-700 flex items-center"><i class="fas fa-calendar-times mr-2 text-orange-500"></i>請假管理</h2>
                 <button onclick="app.toggleLeaveForm()" class="bg-orange-500 hover:bg-orange-600 text-white shadow-lg px-4 py-2 rounded-xl font-bold transition text-sm active:scale-95 border-2 border-orange-600 flex items-center"><i class="fas fa-plus mr-1"></i> 新增請假</button>

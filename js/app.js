@@ -363,76 +363,125 @@ const App = {
         this.logChange('成員刪除', `ID: ${id}`, id); this.closeModal('editModal');
     },
 
-    renderSquads: function() {
+   renderSquads: function() {
         const type = this.currentTab === 'gvg' ? 'gvg' : 'groups';
         const search = document.getElementById('groupSearchInput').value.toLowerCase();
         const canEdit = ['master', 'admin', 'commander'].includes(this.userRole);
         let visibleGroups = this.groups.filter(g => (g.type || 'gvg') === type);
-        if (search) { visibleGroups = visibleGroups.filter(g => g.name.toLowerCase().includes(search) || g.members.some(m => { const mem = this.members.find(x => x.id === (typeof m === 'string' ? m : m.id)); return mem && (mem.gameName.toLowerCase().includes(search) || (mem.mainClass||'').toLowerCase().includes(search) || (mem.role||'').includes(search)); })); }
+        
+        // 搜尋邏輯
+        if (search) { 
+            visibleGroups = visibleGroups.filter(g => 
+                g.name.toLowerCase().includes(search) || 
+                g.members.some(m => { 
+                    const mem = this.members.find(x => x.id === (typeof m === 'string' ? m : m.id)); 
+                    return mem && (mem.gameName.toLowerCase().includes(search) || (mem.mainClass||'').toLowerCase().includes(search) || (mem.role||'').includes(search)); 
+                })
+            ); 
+        }
+
         const grid = document.getElementById('squadGrid'), emptyMsg = document.getElementById('noSquadsMsg');
+        
+        // 篩選按鈕列
         const filterContainer = document.createElement('div');
         filterContainer.className = "col-span-1 lg:col-span-2 flex gap-2 mb-2 overflow-x-auto pb-1";
         const filters = [{id: 'all', label: '全部', color: 'bg-slate-800 text-white'}, {id: '輸出', label: '輸出', color: 'bg-red-500 text-white'}, {id: '輔助', label: '輔助', color: 'bg-green-500 text-white'}, {id: '坦', label: '坦克', color: 'bg-blue-500 text-white'}];
         filterContainer.innerHTML = filters.map(f => { const isActive = this.currentSquadRoleFilter === f.id; const styleClass = isActive ? f.color : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'; return `<button onclick="app.setSquadRoleFilter('${f.id}')" class="px-4 py-1.5 rounded-full text-sm font-bold shadow-sm transition whitespace-nowrap active:scale-95 ${styleClass}">${f.label}</button>`; }).join('');
+        
         grid.innerHTML = '';
         if (visibleGroups.length > 0 || this.currentSquadRoleFilter !== 'all') { grid.insertAdjacentHTML('beforeend', filterContainer.outerHTML); }
         if (visibleGroups.length === 0) { emptyMsg.classList.remove('hidden'); return; }
         emptyMsg.classList.add('hidden');
+
         const groupsHTML = visibleGroups.map(group => {
             const groupMembers = (group.members || []).map(m => { const id = typeof m === 'string' ? m : m.id; const status = typeof m === 'string' ? 'pending' : (m.status || 'pending'); const subId = typeof m === 'string' ? null : (m.subId || null); const mem = this.members.find(x => x.id === id); return mem ? { ...mem, status, subId } : null; }).filter(x => x);
             const isGVG = type === 'gvg';
+            
             const list = groupMembers.map(m => {
+                // 職業篩選
                 if (this.currentSquadRoleFilter !== 'all') { const filterKey = this.currentSquadRoleFilter; const match = m.role.includes(filterKey) || (filterKey === '坦' && m.mainClass.includes('坦')); if (!match) return ''; }
-                const job = (m.mainClass || '').split('(')[0]; const roleColor = m.role.includes('輸出')?'text-red-500':m.role.includes('輔助')?'text-green-500':'text-blue-500';
+                
+                const job = (m.mainClass || '').split('(')[0]; 
+                // [修復] 這裡決定左側邊框顏色
+                const borderColor = m.role.includes('輸出') ? 'border-l-red-400' : m.role.includes('坦') ? 'border-l-blue-400' : 'border-l-green-400';
+                const roleColor = m.role.includes('輸出') ? 'text-red-500' : m.role.includes('輔助') ? 'text-green-500' : 'text-blue-500';
+
                 let actionUI = "", rowClass = "";
+                
                 if (isGVG) {
                     if (m.status === 'leave') rowClass = "row-leave";
                     let subUI = "";
                     if (m.status === 'leave') {
                         if (canEdit) { 
+                            // 替補邏輯 (省略細節以保持簡潔，同原版)
                             let busyIds = [];
                             if (group.date) {
                                 this.groups.forEach(g => {
                                     if (g.type === (group.type||'gvg') && g.date === group.date && g.id !== group.id) {
-                                        g.members.forEach(gm => {
-                                            const mid = typeof gm === 'string' ? gm : gm.id;
-                                            busyIds.push(mid);
-                                            if (typeof gm === 'object' && gm.subId) { busyIds.push(gm.subId); }
-                                        });
+                                        g.members.forEach(gm => { const mid = typeof gm === 'string' ? gm : gm.id; busyIds.push(mid); if (typeof gm === 'object' && gm.subId) { busyIds.push(gm.subId); } });
                                     }
                                 });
                             }
-                            const otherMembers = this.members.filter(x => {
-                                const inCurrent = groupMembers.some(gm => gm.id === x.id);
-                                const isBusy = busyIds.includes(x.id);
-                                const isMe = x.id === m.subId;
-                                if (isMe) return true;
-                                if (inCurrent) return false;
-                                if (isBusy) return false;
-                                return true;
-                            });
-                            
+                            const otherMembers = this.members.filter(x => { const inCurrent = groupMembers.some(gm => gm.id === x.id); const isBusy = busyIds.includes(x.id); const isMe = x.id === m.subId; if (isMe) return true; if (inCurrent) return false; if (isBusy) return false; return true; });
                             const options = otherMembers.map(om => `<option value="${om.id}" ${om.id === m.subId ? 'selected' : ''}>${om.gameName}</option>`).join(''); 
                             subUI = `<select class="sub-select" onchange="app.updateGvgSub('${group.id}', '${m.id}', this.value)" onclick="event.stopPropagation()"><option value="">選擇替補...</option>${options}</select>`; 
                         } 
                         else if (m.subId) { const subMem = this.members.find(x => x.id === m.subId); if (subMem) subUI = `<span class="text-blue-500 text-xs mr-2">⇋ ${subMem.gameName}</span>`; }
                     }
-                    actionUI = `<div class="flex items-center gap-1">${subUI}<div class="gvg-light bg-light-yellow ${m.status === 'leave' ? 'active' : ''}" title="請透過請假單修改狀態"></div><div class="gvg-light ${m.status === 'ready' ? 'bg-light-green active' : 'bg-light-red'}" title="狀態" onclick="event.stopPropagation(); app.toggleGvgStatus('${group.id}', '${m.id}', 'ready_toggle')"></div></div>`;
+                    actionUI = `<div class="flex items-center gap-2">${subUI}<div class="gvg-light bg-light-yellow ${m.status === 'leave' ? 'active' : ''}" title="請假"></div><div class="gvg-light ${m.status === 'ready' ? 'bg-light-green active' : 'bg-light-red'}" title="狀態" onclick="event.stopPropagation(); app.toggleGvgStatus('${group.id}', '${m.id}', 'ready_toggle')"></div></div>`;
                 } else { actionUI = `<span class="text-xs text-slate-300 font-mono">ID:${m.id.slice(-3)}</span>`; }
-                return `<div class="flex items-center justify-between text-sm py-2.5 border-b border-slate-100 last:border-0 hover:bg-slate-50 px-3 transition ${rowClass}"><div class="flex items-center gap-3 min-w-0"><div class="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-xs font-bold ${roleColor}">${m.role.substring(0,1)}</div><div class="flex flex-col min-w-0"><span class="text-slate-800 font-bold truncate member-name">${m.gameName}</span><span class="text-[10px] text-slate-400 font-mono">${job}</span></div></div>${actionUI}</div>`;
+
+                // [修復] 在這裡加入 border-l-4 和 borderColor
+                return `<div class="flex items-center justify-between text-sm py-2.5 border-b border-slate-100 last:border-0 hover:bg-slate-50 px-3 transition border-l-4 ${borderColor} ${rowClass}">
+                    <div class="flex items-center gap-3 min-w-0">
+                        <div class="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-xs font-bold ${roleColor}">${m.role.substring(0,1)}</div>
+                        <div class="flex flex-col min-w-0">
+                            <span class="text-slate-800 font-bold truncate member-name">${m.gameName}</span>
+                            <span class="text-[10px] text-slate-400 font-mono">${job}</span>
+                        </div>
+                    </div>
+                    ${actionUI}
+                </div>`;
             }).join('');
-            const headerClass = isGVG ? 'header squad-card-gvg-header' : 'bg-blue-50 p-4 border-b border-blue-100';
-            const cardClass = isGVG ? 'squad-card-gvg' : 'bg-white rounded-xl shadow-sm border border-blue-100';
+
+            const headerClass = isGVG ? 'squad-card-gvg-header' : 'bg-blue-50 p-4 border-b border-blue-100';
+            const cardClass = isGVG ? 'squad-card-gvg' : 'bg-white rounded-xl shadow-sm border border-blue-100 flex flex-col h-full'; // 確保兩種卡片都 flex flex-col
             const editBtn = canEdit ? `<button onclick="app.openSquadModal('${group.id}')" class="text-slate-400 hover:text-blue-600 p-1"><i class="fas fa-cog"></i></button>` : '';
             const copyBtn = `<button onclick="app.copySquadList('${group.id}')" class="text-slate-400 hover:text-green-600 p-1 ml-2" title="複製隊伍"><i class="fas fa-copy"></i></button>`;
             const leader = group.leaderId ? (this.members.find(m => m.id === group.leaderId)?.gameName || '未知') : '未指定';
             const dateBadge = group.date ? `<span class="text-[10px] bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full mr-2"><i class="far fa-calendar-alt mr-1"></i>${group.date}</span>` : '';
             const subjectBadge = group.subject ? `<span class="text-[10px] bg-purple-100 text-purple-800 px-2 py-0.5 rounded-full"><i class="fas fa-tag mr-1"></i>${group.subject}</span>` : '';
+            
             let footer = "";
-            if (isGVG) { const readyCount = groupMembers.filter(m => m.status === 'ready').length; const leaveCount = groupMembers.filter(m => m.status === 'leave').length; footer = `<div class="bg-white p-3 border-t border-slate-100 flex justify-between items-center shrink-0 text-xs font-bold text-slate-500"><span class="text-blue-600">👑 隊長: ${leader}</span><div class="flex gap-2"><span class="text-green-600">🟢 ${readyCount}</span><span class="text-yellow-600">🟡 ${leaveCount}</span></div></div>`; } 
-            else { footer = `<div class="bg-white p-3 border-t border-slate-100 flex justify-between items-center shrink-0 text-xs font-bold text-slate-500"><span class="text-blue-600">👑 隊長: ${leader}</span><span class="text-slate-400">成員 ${groupMembers.length} 人</span></div>`; }
-            return `<div class="${cardClass} flex flex-col h-full overflow-hidden"><div class="${headerClass} p-4 flex justify-between items-center rounded-t-[7px]"><div><div class="flex items-center mb-1">${dateBadge}${subjectBadge}</div><h3 class="text-xl font-bold">${group.name}</h3><p class="text-xs mt-1 italic opacity-80">${group.note||''}</p></div><div class="flex items-center">${copyBtn}${editBtn}</div></div><div class="flex-grow p-1 overflow-y-auto max-h-80">${list.length?list:'<p class="text-sm text-slate-400 text-center py-4">無成員 (或被篩選隱藏)</p>'}</div>${footer}</div>`;
+            if (isGVG) { 
+                const readyCount = groupMembers.filter(m => m.status === 'ready').length; 
+                const leaveCount = groupMembers.filter(m => m.status === 'leave').length; 
+                footer = `<div class="bg-white p-3 border-t border-slate-100 flex justify-between items-center shrink-0 text-xs font-bold text-slate-500 mt-auto">
+                    <span class="text-blue-600">👑 隊長: ${leader}</span>
+                    <div class="flex gap-2"><span class="text-green-600">🟢 ${readyCount}</span><span class="text-yellow-600">🟡 ${leaveCount}</span></div>
+                </div>`; 
+            } else { 
+                footer = `<div class="bg-white p-3 border-t border-slate-100 flex justify-between items-center shrink-0 text-xs font-bold text-slate-500 mt-auto">
+                    <span class="text-blue-600">👑 隊長: ${leader}</span><span class="text-slate-400">成員 ${groupMembers.length} 人</span>
+                </div>`; 
+            }
+
+            return `<div class="${cardClass}">
+                <div class="${headerClass} flex justify-between items-center rounded-t-[11px]">
+                    <div>
+                        <div class="flex items-center mb-1">${dateBadge}${subjectBadge}</div>
+                        <h3 class="text-xl font-bold text-slate-800">${group.name}</h3>
+                        <p class="text-xs mt-1 italic text-slate-500">${group.note||''}</p>
+                    </div>
+                    <div class="flex items-center">${copyBtn}${editBtn}</div>
+                </div>
+                <div class="flex-grow overflow-y-auto max-h-80 custom-scrollbar">
+                    ${list.length ? list : '<p class="text-sm text-slate-400 text-center py-4">無成員 (或被篩選隱藏)</p>'}
+                </div>
+                ${footer}
+            </div>`;
         }).join('');
+        
         grid.insertAdjacentHTML('beforeend', groupsHTML);
     },
     toggleGvgStatus: function(groupId, memberId, action) {
