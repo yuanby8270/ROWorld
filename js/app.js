@@ -1,5 +1,5 @@
 /* =====================================================
-   app.js — Production v3.3 (Sub Logic Restored)
+   app.js — Production v3.5 (Final Polish)
    ===================================================== */
 
 if (typeof window.AppConfig === 'undefined') { alert("系統錯誤：設定檔未載入。"); }
@@ -243,7 +243,6 @@ const App = {
             grid.innerHTML = filtered.map(m => this.createCardHTML(m)).join('');
         }
         
-        // Stats
         const count = r => this.members.filter(m=>(m.role||'').includes(r)).length;
         ['dps','sup','tank'].forEach(k => {
              const el=document.getElementById('stat-'+k); if(el) el.innerText=count(k==='dps'?'輸出':k==='sup'?'輔助':'坦');
@@ -398,12 +397,13 @@ const App = {
                 else if((mem.role||'').includes('輔助')) { border='border-l-green-400'; color='text-green-500'; }
                 
                 let action = '';
-                // [修復] GVG 替補選單邏輯
                 if(type==='gvg') {
                     let subUI = "";
+                    // [修復] 替補選單：只顯示狀態為 'leave' 且使用者有權限時
                     if (status === 'leave') {
                         if (canEdit) { 
                             let busyIds = [];
+                            // 找出當日已出戰的成員 ID
                             if (g.date) {
                                 this.groups.forEach(og => {
                                     if ((og.type||'gvg') === 'gvg' && og.date === g.date && og.id !== g.id) {
@@ -415,13 +415,14 @@ const App = {
                                     }
                                 });
                             }
+                            // 過濾出可用替補（排除自己與忙碌者）
                             const available = this.members.filter(x => {
                                 const inCurrent = g.members.some(gm => (typeof gm==='string'?gm:gm.id) === x.id);
                                 const isBusy = busyIds.includes(x.id);
                                 const isMe = (m.subId === x.id);
-                                if (isMe) return true;
-                                if (inCurrent) return false;
-                                if (isBusy) return false;
+                                if (isMe) return true; // 允許選回目前的替補
+                                if (inCurrent) return false; // 排除同隊成員
+                                if (isBusy) return false; // 排除當日其他隊成員
                                 return true;
                             });
                             
@@ -473,7 +474,6 @@ const App = {
         else this.saveLocal('groups');
     },
     
-    // [修復] 替補更新函式
     updateGvgSub: function(gid, mid, subId) {
         const g = this.groups.find(x=>x.id===gid); if(!g) return;
         const idx = g.members.findIndex(m => (typeof m==='string'?m:m.id)===mid); if(idx===-1) return;
@@ -511,25 +511,76 @@ const App = {
     
     renderSquadMemberSelect: function() {
         const list = document.getElementById('squadMemberSelect'), search = (document.getElementById('memberSearch').value||'').toLowerCase();
+        
+        // [修復] 讀取當前設定的日期，用來判斷請假與忙碌狀態
+        const targetDate = document.getElementById('squadDate').value;
+        const currentSquadId = document.getElementById('squadId').value;
+        const type = document.getElementById('squadType').value;
+
+        // 1. 找出當日已在其他隊伍的忙碌成員 (Hide)
+        const busyIds = new Set();
+        if (targetDate) {
+            this.groups.forEach(g => {
+                // 必須是同類型 (GVG) 且同日期，但不同隊伍
+                if ((g.type||'gvg') === type && g.date === targetDate && g.id !== currentSquadId) {
+                    g.members.forEach(m => {
+                        busyIds.add(typeof m === 'string' ? m : m.id);
+                        if (typeof m === 'object' && m.subId) busyIds.add(m.subId); // 替補也算忙碌
+                    });
+                }
+            });
+        }
+
+        // 2. 找出當日請假的成員 (Disable)
+        const leaveIds = new Set();
+        if (targetDate) {
+            this.leaves.forEach(l => {
+                if (l.date === targetDate) leaveIds.add(l.memberId);
+            });
+        }
+
         const filtered = this.members.filter(m => (m.gameName+m.mainClass).toLowerCase().includes(search));
         const isSel = (id) => this.currentSquadMembers.some(x=>x.id===id);
-        filtered.sort((a,b) => isSel(b.id) - isSel(a.id));
+        
+        // 排序：已選 > 正常 > 請假
+        filtered.sort((a,b) => {
+            const selA = isSel(a.id), selB = isSel(b.id);
+            if (selA !== selB) return selA ? -1 : 1;
+            const leaveA = leaveIds.has(a.id), leaveB = leaveIds.has(b.id);
+            if (leaveA !== leaveB) return leaveA ? 1 : -1; // 請假排後面
+            return 0;
+        });
         
         document.getElementById('selectedCount').innerText = this.currentSquadMembers.length;
+        
         list.innerHTML = filtered.map(m => {
+            // [規則1] 如果忙碌，直接隱藏 (不顯示)
+            if (busyIds.has(m.id)) return '';
+
             const checked = isSel(m.id);
-            return `<label class="flex items-center p-2 border rounded ${checked?'bg-blue-50 border-blue-200':'bg-white'} cursor-pointer">
-                <input type="checkbox" onchange="app.toggleSquadMember('${m.id}')" ${checked?'checked':''} class="mr-3 text-blue-600 rounded">
-                <div><div class="font-bold text-sm text-slate-700">${m.gameName}</div><div class="text-xs text-slate-400">${m.mainClass}</div></div>
+            const isLeave = leaveIds.has(m.id);
+            
+            // [規則2] 如果請假，顯示灰色且無法點選
+            const disabledState = isLeave ? 'opacity-50 cursor-not-allowed bg-slate-100 border-slate-100' : 'cursor-pointer hover:bg-slate-50 border-slate-200';
+            const bgClass = checked ? 'bg-blue-50 border-blue-200' : 'bg-white';
+            const clickAction = isLeave ? '' : `onchange="app.toggleSquadMember('${m.id}')"`;
+            const leaveBadge = isLeave ? '<span class="text-[10px] text-red-500 font-bold ml-2">(請假)</span>' : '';
+
+            return `<label class="flex items-center p-2 border rounded ${isLeave ? disabledState : bgClass}">
+                <input type="checkbox" ${clickAction} ${checked?'checked':''} ${isLeave?'disabled':''} class="mr-3 text-blue-600 rounded">
+                <div><div class="font-bold text-sm text-slate-700">${m.gameName}${leaveBadge}</div><div class="text-xs text-slate-400">${m.mainClass}</div></div>
             </label>`;
         }).join('');
         
         // Leader select
         const lSel = document.getElementById('squadLeader');
+        const currL = lSel.value;
         lSel.innerHTML = '<option value="">未指定</option>' + this.currentSquadMembers.map(s => {
             const m=this.members.find(x=>x.id===s.id); return m?`<option value="${m.id}">${m.gameName}</option>`:'';
         }).join('');
+        lSel.value = currL;
     },
+    
     toggleSquadMember: function(id) {
         const idx = this.currentSquadMembers.findIndex(x=>x.id===id);
         if(idx>-1) this.currentSquadMembers.splice(idx,1); else this.currentSquadMembers.push({id, status:'pending'});
