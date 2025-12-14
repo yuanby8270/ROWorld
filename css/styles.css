@@ -1,5 +1,5 @@
 /* ======================================================
-   styles.css — Final Polished
+   styles.css — Final Polished v4 (Activity Fix)
    ====================================================== */
 body { background-color: #f8fafc; color: #334155; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; -webkit-tap-highlight-color: transparent; overflow-x: hidden; }
 input, select, textarea { font-size: 16px !important; }
@@ -44,12 +44,18 @@ input, select, textarea { font-size: 16px !important; }
 .tag-sup { background: #f0fdf4; color: #15803d; border: 1px solid #bbf7d0; }
 .tag-tank { background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; }
 
+/* GVG Lights */
 .gvg-light { width: 14px; height: 14px; border-radius: 50%; cursor: pointer; border: 2px solid #fff; box-shadow: 0 0 0 1px #cbd5e1; transition: all 0.2s ease; opacity: 0.3; filter: grayscale(100%); }
 .gvg-light:hover { transform: scale(1.2); opacity: 0.8; }
 .gvg-light.active { opacity: 1; filter: grayscale(0%); transform: scale(1.1); box-shadow: 0 0 0 2px rgba(255,255,255,0.8), 0 0 8px currentColor; }
 .bg-light-red { background-color: #ef4444; color: #ef4444; }
 .bg-light-green { background-color: #22c55e; color: #22c55e; }
 .bg-light-yellow { background-color: #fbbf24; color: #fbbf24; }
+
+/* [新增] 活動燈號樣式 */
+.activity-light { width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.2s; background: #e2e8f0; color: #94a3b8; }
+.activity-light.claimed { background: #dcfce7; color: #16a34a; box-shadow: 0 0 0 2px #bbf7d0; }
+.activity-light:hover { transform: scale(1.1); }
 
 .admin-mode-on { color: #3b82f6 !important; background-color: #eff6ff; border: 1px solid #bfdbfe !important; }
 .animate-fade-in { animation: fadeIn 0.4s ease-out forwards; }

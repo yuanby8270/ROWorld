@@ -1,5 +1,5 @@
 /* =====================================================
-   app.js — Production v3.5 (Final Polish)
+   app.js — Production v5.0 (Master Merged: GVG + Activity)
    ===================================================== */
 
 if (typeof window.AppConfig === 'undefined') { alert("系統錯誤：設定檔未載入。"); }
@@ -399,11 +399,9 @@ const App = {
                 let action = '';
                 if(type==='gvg') {
                     let subUI = "";
-                    // [修復] 替補選單：只顯示狀態為 'leave' 且使用者有權限時
                     if (status === 'leave') {
                         if (canEdit) { 
                             let busyIds = [];
-                            // 找出當日已出戰的成員 ID
                             if (g.date) {
                                 this.groups.forEach(og => {
                                     if ((og.type||'gvg') === 'gvg' && og.date === g.date && og.id !== g.id) {
@@ -415,14 +413,13 @@ const App = {
                                     }
                                 });
                             }
-                            // 過濾出可用替補（排除自己與忙碌者）
                             const available = this.members.filter(x => {
                                 const inCurrent = g.members.some(gm => (typeof gm==='string'?gm:gm.id) === x.id);
                                 const isBusy = busyIds.includes(x.id);
                                 const isMe = (m.subId === x.id);
-                                if (isMe) return true; // 允許選回目前的替補
-                                if (inCurrent) return false; // 排除同隊成員
-                                if (isBusy) return false; // 排除當日其他隊成員
+                                if (isMe) return true;
+                                if (inCurrent) return false;
+                                if (isBusy) return false;
                                 return true;
                             });
                             
@@ -509,29 +506,28 @@ const App = {
         this.showModal('squadModal');
     },
     
+    // [重點整合] 這裡必須包含 v3.6 的忙碌過濾邏輯
     renderSquadMemberSelect: function() {
         const list = document.getElementById('squadMemberSelect'), search = (document.getElementById('memberSearch').value||'').toLowerCase();
         
-        // [修復] 讀取當前設定的日期，用來判斷請假與忙碌狀態
         const targetDate = document.getElementById('squadDate').value;
         const currentSquadId = document.getElementById('squadId').value;
         const type = document.getElementById('squadType').value;
 
-        // 1. 找出當日已在其他隊伍的忙碌成員 (Hide)
+        // Busy Filtering
         const busyIds = new Set();
         if (targetDate) {
             this.groups.forEach(g => {
-                // 必須是同類型 (GVG) 且同日期，但不同隊伍
                 if ((g.type||'gvg') === type && g.date === targetDate && g.id !== currentSquadId) {
                     g.members.forEach(m => {
                         busyIds.add(typeof m === 'string' ? m : m.id);
-                        if (typeof m === 'object' && m.subId) busyIds.add(m.subId); // 替補也算忙碌
+                        if (typeof m === 'object' && m.subId) busyIds.add(m.subId);
                     });
                 }
             });
         }
 
-        // 2. 找出當日請假的成員 (Disable)
+        // Leave Filtering
         const leaveIds = new Set();
         if (targetDate) {
             this.leaves.forEach(l => {
@@ -542,25 +538,22 @@ const App = {
         const filtered = this.members.filter(m => (m.gameName+m.mainClass).toLowerCase().includes(search));
         const isSel = (id) => this.currentSquadMembers.some(x=>x.id===id);
         
-        // 排序：已選 > 正常 > 請假
         filtered.sort((a,b) => {
             const selA = isSel(a.id), selB = isSel(b.id);
             if (selA !== selB) return selA ? -1 : 1;
             const leaveA = leaveIds.has(a.id), leaveB = leaveIds.has(b.id);
-            if (leaveA !== leaveB) return leaveA ? 1 : -1; // 請假排後面
+            if (leaveA !== leaveB) return leaveA ? 1 : -1;
             return 0;
         });
         
         document.getElementById('selectedCount').innerText = this.currentSquadMembers.length;
         
         list.innerHTML = filtered.map(m => {
-            // [規則1] 如果忙碌，直接隱藏 (不顯示)
-            if (busyIds.has(m.id)) return '';
+            if (busyIds.has(m.id)) return ''; // Busy Hide
 
             const checked = isSel(m.id);
             const isLeave = leaveIds.has(m.id);
             
-            // [規則2] 如果請假，顯示灰色且無法點選
             const disabledState = isLeave ? 'opacity-50 cursor-not-allowed bg-slate-100 border-slate-100' : 'cursor-pointer hover:bg-slate-50 border-slate-200';
             const bgClass = checked ? 'bg-blue-50 border-blue-200' : 'bg-white';
             const clickAction = isLeave ? '' : `onchange="app.toggleSquadMember('${m.id}')"`;
@@ -572,7 +565,6 @@ const App = {
             </label>`;
         }).join('');
         
-        // Leader select
         const lSel = document.getElementById('squadLeader');
         const currL = lSel.value;
         lSel.innerHTML = '<option value="">未指定</option>' + this.currentSquadMembers.map(s => {
@@ -724,15 +716,45 @@ const App = {
         const grid=document.getElementById('activityList'); if(!grid) return;
         if(this.activities.length===0) { document.getElementById('noActivitiesMsg').classList.remove('hidden'); grid.innerHTML=''; return; }
         document.getElementById('noActivitiesMsg').classList.add('hidden');
-        grid.innerHTML = this.activities.map(a => `
-            <div class="activity-card p-4">
-                <div class="font-bold text-lg text-slate-800">${a.name}</div>
-                <div class="text-xs text-slate-500 mb-2">${a.note||''}</div>
-                <div class="bg-yellow-50 p-2 rounded text-xs text-yellow-800 font-bold mb-2">得獎者: ${a.winners?a.winners.length:0} 人</div>
-                ${this.isAdminOrMaster() ? `<button onclick="app.openActivityModal('${a.id}')" class="text-blue-500 text-xs underline">編輯</button>` : ''}
-            </div>
-        `).join('');
+        grid.innerHTML = this.activities.map(a => {
+            const winnersHTML = (a.winners || []).map((w, idx) => {
+                const mem = this.members.find(x => x.id === w.memberId);
+                const lightClass = w.claimed ? 'claimed' : '';
+                return `<div class="flex justify-between items-center py-2 border-b border-slate-100 last:border-0">
+                    <div>
+                        <div class="font-bold text-sm text-slate-700">${mem ? mem.gameName : 'Unknown'}</div>
+                        <div class="text-xs text-slate-400">${w.reward || '未填寫獎品'}</div>
+                    </div>
+                    <div class="activity-light ${lightClass}" onclick="app.handleClaimReward('${a.id}', ${idx})">
+                        <i class="fas fa-check text-xs"></i>
+                    </div>
+                </div>`;
+            }).join('');
+
+            return `<div class="activity-card bg-white rounded-xl shadow-sm border border-yellow-200 overflow-hidden">
+                <div class="bg-yellow-50 p-4 border-b border-yellow-100 flex justify-between">
+                    <div><h3 class="font-bold text-lg text-slate-800">${a.name}</h3><p class="text-xs text-slate-500">${a.note || ''}</p></div>
+                    ${this.isAdminOrMaster() ? `<button onclick="app.openActivityModal('${a.id}')" class="text-slate-400 hover:text-slate-600"><i class="fas fa-edit"></i></button>` : ''}
+                </div>
+                <div class="p-4">${winnersHTML || '<p class="text-center text-xs text-slate-300">無得獎者</p>'}</div>
+            </div>`;
+        }).join('');
     },
+
+    // [重點] 領獎邏輯 (v4.0 功能)
+    handleClaimReward: function(actId, wIdx) {
+        if(!this.isAdminOrMaster()) return;
+        const act = this.activities.find(a => a.id === actId);
+        if(!act || !act.winners[wIdx]) return;
+        
+        act.winners[wIdx].claimed = !act.winners[wIdx].claimed;
+        if(act.winners[wIdx].claimed) act.winners[wIdx].claimedAt = Date.now();
+        
+        if(this.mode==='firebase') this.db.collection(COLLECTION_NAMES.ACTIVITIES).doc(actId).update({winners:act.winners});
+        else this.saveLocal('activities');
+        this.renderActivities();
+    },
+
     openActivityModal: function(id) {
         if(id) {
             const a = this.activities.find(x=>x.id===id);
@@ -743,8 +765,32 @@ const App = {
             document.getElementById('activityName').value=''; document.getElementById('activityId').value='';
             this.currentActivityWinners=[]; document.getElementById('deleteActivityBtnContainer').innerHTML='';
         }
-        this.renderWinnerList(); this.showModal('activityModal');
+        this.renderActivityWinnersList(); this.showModal('activityModal');
     },
+
+    // [重點] 獎品輸入 (v4.0 功能)
+    renderActivityWinnersList: function() {
+        const c=document.getElementById('winnerListContainer'); c.innerHTML='';
+        document.getElementById('winnerCount').innerText = this.currentActivityWinners.length;
+        this.currentActivityWinners.forEach((w, idx) => {
+            const m=this.members.find(x=>x.id===w.memberId);
+            c.innerHTML+=`<div class="bg-yellow-50 p-2 rounded text-sm flex items-center gap-2 mb-2">
+                <span class="font-bold w-24 truncate">${m?m.gameName:'未知'}</span>
+                <input type="text" placeholder="獎品內容" class="flex-grow text-xs p-1 border rounded" value="${w.reward||''}" onchange="app.updateWinnerReward(${idx}, this.value)">
+                <button onclick="app.removeWinner(${idx})" class="text-red-400 hover:text-red-600"><i class="fas fa-times"></i></button>
+            </div>`;
+        });
+    },
+
+    updateWinnerReward: function(idx, val) {
+        this.currentActivityWinners[idx].reward = val;
+    },
+    
+    removeWinner: function(idx) {
+        this.currentActivityWinners.splice(idx, 1);
+        this.renderActivityWinnersList();
+    },
+
     saveActivity: async function() {
         const id=document.getElementById('activityId').value;
         const data={ name:document.getElementById('activityName').value, note:document.getElementById('activityNote').value, winners:this.currentActivityWinners };
@@ -783,15 +829,7 @@ const App = {
         if(idx>-1) this.tempWinnerSelection.splice(idx,1); else this.tempWinnerSelection.push({memberId:id});
         this.renderWinnerSelect();
     },
-    confirmWinnerSelection: function() { this.currentActivityWinners=[...this.tempWinnerSelection]; this.renderWinnerList(); this.closeModal('winnerSelectionModal'); },
-    renderWinnerList: function() {
-        const c=document.getElementById('winnerListContainer'); c.innerHTML='';
-        document.getElementById('winnerCount').innerText = this.currentActivityWinners.length;
-        this.currentActivityWinners.forEach(w => {
-            const m=this.members.find(x=>x.id===w.memberId);
-            c.innerHTML+=`<div class="bg-yellow-50 p-2 rounded text-sm flex justify-between"><span>${m?m.gameName:'未知'}</span></div>`;
-        });
-    },
+    confirmWinnerSelection: function() { this.currentActivityWinners=[...this.tempWinnerSelection]; this.renderActivityWinnersList(); this.closeModal('winnerSelectionModal'); },
     performLuckyDraw: function() {
         const pool=this.members.filter(m=>!this.tempWinnerSelection.some(x=>x.memberId===m.id));
         if(pool.length===0) return alert("無人可抽");
