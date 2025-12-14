@@ -1,21 +1,22 @@
-// app.js - Part 1: Core, Config & State Management
+// app.js - 完整修正版
 
+// 1. 強制檢查 Config 是否載入，若無則停止執行 (修復截圖中的 Crash)
 if (typeof window.AppConfig === 'undefined') {
-    console.error("Config not loaded.");
-    document.body.innerHTML = '<div style="padding: 50px; text-align: center; color: red;">錯誤：config.js 未載入。</div>';
+    console.error("Config not loaded. Please check index.html script order.");
+    document.body.innerHTML = '<div style="padding: 50px; text-align: center; color: red; font-size: 20px; font-weight: bold;">錯誤：config.js 未載入。<br><span style="font-size:14px; color:black;">請檢查 HTML 檔案，確認 config.js 放在 app.js 之前。</span></div>';
+    throw new Error("Critical Error: AppConfig is missing. Script execution stopped.");
 }
 
-const Cfg = window.AppConfig || {};
+const Cfg = window.AppConfig;
 const { COLLECTION_NAMES, SEED_DATA, SEED_GROUPS, SEED_ACTIVITIES, JOB_STRUCTURE, JOB_STYLES } = Cfg;
 
 const App = {
     db: null, auth: null,
     members: [], groups: [], activities: [], history: [],
-    raidThemes: ['GVG 攻城戰', '公會副本', '野外王'], // 預設主題
+    raidThemes: ['GVG 攻城戰', '公會副本', '野外王'], 
     currentTab: 'home', 
     currentFilter: 'all', currentJobFilter: 'all', 
     
-    // [新增] 團體戰篩選狀態
     currentSquadRoleFilter: 'all', 
     currentModalRoleFilter: 'all', 
     currentSquadDateFilter: 'all', 
@@ -23,7 +24,7 @@ const App = {
 
     mode: 'demo', userRole: 'guest',
     currentSquadMembers: [], currentActivityWinners: [], tempWinnerSelection: [],
-    leaves: [], // 預先請假資料
+    leaves: [], 
     BASE_TIME: new Date('2023-01-01').getTime(),
     CLEANUP_DAYS: 14, 
 
@@ -40,7 +41,8 @@ const App = {
     },
 
     normalizeMemberData: function(m) {
-        const seedIndex = Cfg.SEED_DATA.findIndex(seed => seed.id === m.id);
+        // 這裡就是原本報錯的地方，現在因為上方有檢查，Cfg.SEED_DATA 保證存在
+        const seedIndex = Cfg.SEED_DATA ? Cfg.SEED_DATA.findIndex(seed => seed.id === m.id) : -1;
         if (seedIndex !== -1) return { ...m, createdAt: this.BASE_TIME + (seedIndex * 1000) };
         return { ...m, createdAt: m.createdAt || Date.now() };
     },
@@ -77,12 +79,17 @@ const App = {
 
         if (config && config.apiKey) {
             try {
-                if (!firebase.apps.length) firebase.initializeApp(config);
-                this.auth = firebase.auth();
-                this.db = firebase.firestore();
-                this.mode = 'firebase';
-                this.syncWithFirebase();
-            } catch (e) { this.mode = 'demo'; }
+                if (typeof firebase !== 'undefined' && !firebase.apps.length) {
+                    firebase.initializeApp(config);
+                    this.auth = firebase.auth();
+                    this.db = firebase.firestore();
+                    this.mode = 'firebase';
+                    this.syncWithFirebase();
+                } else if (typeof firebase === 'undefined') {
+                    console.warn("Firebase SDK not loaded.");
+                    this.mode = 'demo';
+                }
+            } catch (e) { console.error(e); this.mode = 'demo'; }
         } else { this.mode = 'demo'; }
     },
     
@@ -109,7 +116,7 @@ const App = {
         this.db.collection('history').orderBy('timestamp', 'desc').limit(50).onSnapshot(snap => {
             const arr = []; snap.forEach(d => arr.push(d.data()));
             this.history = arr; this.saveLocal('history');
-            if(!document.getElementById('historyModal').classList.contains('hidden')) { this.showHistoryModal(); }
+            if(document.getElementById('historyModal') && !document.getElementById('historyModal').classList.contains('hidden')) { this.showHistoryModal(); }
         });
     },
 
@@ -142,7 +149,7 @@ const App = {
     
     logChange: function(action, details, targetId) {
         const log = { timestamp: Date.now(), user: this.userRole, action, details, targetId: targetId || 'N/A' };
-        if (this.mode === 'firebase') { this.db.collection('history').add(log); } 
+        if (this.mode === 'firebase' && this.db) { this.db.collection('history').add(log); } 
         else { this.cleanOldHistory(); this.history.unshift(log); this.saveLocal('history'); }
     },
 
@@ -166,8 +173,10 @@ const App = {
     updateAdminUI: function() {
         const btn = document.getElementById('adminToggleBtn'), adminControls = document.getElementById('adminControls');
         const isAuth = this.userRole !== 'guest';
-        if(isAuth) { btn.classList.add('admin-mode-on'); btn.innerHTML = '<i class="fas fa-sign-out-alt"></i>'; } 
-        else { btn.classList.remove('admin-mode-on'); btn.innerHTML = '<i class="fas fa-user-shield"></i>'; }
+        if (btn) {
+            if(isAuth) { btn.classList.add('admin-mode-on'); btn.innerHTML = '<i class="fas fa-sign-out-alt"></i>'; } 
+            else { btn.classList.remove('admin-mode-on'); btn.innerHTML = '<i class="fas fa-user-shield"></i>'; }
+        }
         if (['master', 'admin'].includes(this.userRole)) { if(adminControls) adminControls.classList.remove('hidden'); } 
         else { if(adminControls) adminControls.classList.add('hidden'); }
         const rankSelect = document.getElementById('rank'), lockIcon = document.getElementById('rankLockIcon');
@@ -211,7 +220,9 @@ const App = {
             const targetView = document.getElementById('view-'+tab); if(targetView) targetView.classList.remove('hidden'); 
         }
         
-        document.getElementById('nav-container').classList.toggle('hidden', tab === 'home');
+        const navContainer = document.getElementById('nav-container');
+        if(navContainer) navContainer.classList.toggle('hidden', tab === 'home');
+        
         document.querySelectorAll('.nav-pill').forEach(b => b.classList.remove('active'));
         const activeBtn = document.getElementById('tab-' + tab); if(activeBtn) activeBtn.classList.add('active');
         
@@ -328,7 +339,6 @@ const App = {
     setSquadRoleFilter: function(f) { this.currentSquadRoleFilter = f; this.renderSquads(); },
     setModalRoleFilter: function(f) { this.currentModalRoleFilter = f; this.renderSquadMemberSelect(); const btns = document.querySelectorAll('#modalFilterContainer button'); btns.forEach(b => { const isActive = (b.getAttribute('data-filter') === f); const activeClass = b.getAttribute('data-active-class'); b.className = isActive ? `px-3 py-1 rounded text-xs font-bold shadow-sm transition whitespace-nowrap active:scale-95 ${activeClass}` : `px-3 py-1 rounded text-xs font-bold bg-white text-slate-600 border border-slate-200 hover:bg-slate-50 transition whitespace-nowrap`; }); },
     
-    // [新增] 設定日期與主題篩選
     setSquadDateFilter: function(val) { this.currentSquadDateFilter = val; this.renderSquads(); },
     setSquadSubjectFilter: function(val) { this.currentSquadSubjectFilter = val; this.renderSquads(); },
 
@@ -374,19 +384,15 @@ const App = {
         this.logChange('成員刪除', `ID: ${id}`, id); this.closeModal('editModal');
     },
 
-renderSquads: function() {
+    renderSquads: function() {
         const type = this.currentTab === 'gvg' ? 'gvg' : 'groups';
         const search = document.getElementById('groupSearchInput').value.toLowerCase();
         const canEdit = ['master', 'admin', 'commander'].includes(this.userRole);
         
-        // 1. 取得所有該類型的隊伍
         let allGroups = this.groups.filter(g => (g.type || 'gvg') === type);
-
-        // 2. 準備篩選選單的資料來源
         const uniqueDates = [...new Set(allGroups.map(g => g.date).filter(d => d))].sort().reverse();
-        const themes = this.raidThemes; // 直接使用 raidThemes，確保包含自訂主題
+        const themes = this.raidThemes;
 
-        // 3. 執行篩選邏輯
         let visibleGroups = allGroups.filter(g => {
             const matchSearch = !search || g.name.toLowerCase().includes(search) || g.members.some(m => { 
                 const mem = this.members.find(x => x.id === (typeof m === 'string' ? m : m.id)); 
@@ -400,7 +406,6 @@ renderSquads: function() {
         const grid = document.getElementById('squadGrid'), emptyMsg = document.getElementById('noSquadsMsg');
         grid.innerHTML = '';
 
-        // 4. 渲染篩選控制列
         const controlsContainer = document.createElement('div');
         controlsContainer.className = "col-span-1 lg:col-span-2 flex flex-col md:flex-row gap-3 mb-4 p-1";
         
@@ -667,7 +672,6 @@ renderSquads: function() {
         }
         this.showModal('historyModal');
     },
-    // --- Utils ---
     downloadSelf: function() {
         const htmlContent = document.documentElement.outerHTML;
         const blob = new Blob([htmlContent], { type: 'text/html' });
