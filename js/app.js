@@ -1,5 +1,5 @@
 /* =====================================================
-   app.js — Production v3.2 (Sort Fix + Leave FAB Fix)
+   app.js — Production v3.3 (Sub Logic Restored)
    ===================================================== */
 
 if (typeof window.AppConfig === 'undefined') { alert("系統錯誤：設定檔未載入。"); }
@@ -48,29 +48,15 @@ const App = {
         });
     },
 
-    // [修正] 資料標準化：確保原始成員依照 SEED 順序，新成員依照時間
     normalizeMemberData: function(m) {
         if (!m) return null;
-        
         let created = m.createdAt;
-        
-        // 如果沒有建立時間 (通常是原始資料)，則依照 SEED_DATA 的索引給予一個舊時間
         if (!created) {
             const seedIndex = Cfg.SEED_DATA.findIndex(seed => seed.id === m.id);
-            if (seedIndex !== -1) {
-                // 給予一個固定的舊時間，加上索引值確保順序
-                created = this.BASE_TIME + (seedIndex * 1000); 
-            } else {
-                created = Date.now(); // 找不到就當作現在新增的
-            }
+            if (seedIndex !== -1) created = this.BASE_TIME + (seedIndex * 1000); 
+            else created = Date.now();
         }
-
-        return { 
-            ...m, 
-            role: m.role || '待定', 
-            mainClass: m.mainClass || '初心者', 
-            createdAt: created 
-        };
+        return { ...m, role: m.role || '待定', mainClass: m.mainClass || '初心者', createdAt: created };
     },
 
     loadLocalState: function() {
@@ -202,7 +188,6 @@ const App = {
         this.scheduleRender();
     },
 
-    // [修正] 主按鈕行為：加入請假頁面的支援
     handleMainAction: function() {
         if(this.currentTab==='members') this.openAddModal();
         else if(this.currentTab==='gvg'||this.currentTab==='groups') {
@@ -333,7 +318,6 @@ const App = {
         document.getElementById('role').value=(m.role||'待定').split(' ')[0]; document.getElementById('rank').value=m.rank||'成員';
         document.getElementById('intro').value=m.intro||'';
         
-        // Job Logic
         const full=m.mainClass||'', match=full.match(/^([^(]+)\(([^)]+)\)$/);
         const bs=document.getElementById('baseJobSelect'), ss=document.getElementById('subJobSelect');
         const inp=document.getElementById('subJobInput'), wrap=document.getElementById('subJobSelectWrapper');
@@ -368,37 +352,22 @@ const App = {
         this.closeModal('editModal'); this.showToast("成員已儲存");
     },
 
-    // [修正] 刪除成員：連動移除隊伍成員，但「保留」活動得獎紀錄
     deleteMember: async function(id) {
-        if (!confirm("確定要刪除這位成員嗎？\n(注意：將從所有隊伍中移除，但保留活動得獎紀錄)")) return;
-
-        if (this.mode === 'firebase') {
-            await this.db.collection(COLLECTION_NAMES.MEMBERS).doc(id).delete();
-        }
+        if(!confirm("確定要刪除這位成員嗎？\n(注意：將從所有隊伍中移除，但保留活動得獎紀錄)")) return;
+        if (this.mode === 'firebase') await this.db.collection(COLLECTION_NAMES.MEMBERS).doc(id).delete();
         
-        // 1. 從成員列表移除
         this.members = this.members.filter(m => m.id !== id);
-        
-        // 2. 連動刪除：從「隊伍 (Groups/GVG)」中移除該成員
         this.groups.forEach(g => {
-            const originalLength = g.members.length;
+            const len = g.members.length;
             g.members = g.members.filter(m => (typeof m === 'string' ? m : m.id) !== id);
-            
-            // 如果隊長被刪除了，清空隊長欄位
             if (g.leaderId === id) g.leaderId = null;
-
-            if (this.mode === 'firebase' && g.members.length !== originalLength) {
-                this.db.collection(COLLECTION_NAMES.GROUPS).doc(g.id).update({ 
-                    members: g.members, leaderId: g.leaderId 
-                });
+            if (this.mode === 'firebase' && g.members.length !== len) {
+                this.db.collection(COLLECTION_NAMES.GROUPS).doc(g.id).update({ members: g.members, leaderId: g.leaderId });
             }
         });
         
         if (this.mode === 'demo') this.saveLocal();
-        
-        this.closeModal('editModal'); 
-        this.showToast("成員已刪除 (保留活動紀錄)");
-        this.renderMembers();
+        this.closeModal('editModal'); this.showToast("成員已刪除"); this.renderMembers();
     },
 
     // --- Squads / GVG ---
@@ -412,10 +381,11 @@ const App = {
         if(filtered.length===0) { if(noMsg) noMsg.classList.remove('hidden'); return; }
         if(noMsg) noMsg.classList.add('hidden');
 
+        const canEdit = ['master','admin','commander'].includes(this.userRole);
+
         grid.innerHTML = filtered.map(g => {
             const dateBadge = g.date ? `<span class="bg-white/50 border border-slate-200 text-slate-600 text-[10px] px-2 py-0.5 rounded font-bold mr-2">${g.date}</span>` : '';
-            const editBtn = ['master','admin','commander'].includes(this.userRole) ? `<button onclick="app.openSquadModal('${g.id}')" class="text-slate-400 hover:text-slate-600"><i class="fas fa-cog"></i></button>` : '';
-            
+            const editBtn = canEdit ? `<button onclick="app.openSquadModal('${g.id}')" class="text-slate-400 hover:text-slate-600"><i class="fas fa-cog"></i></button>` : '';
             const headerClass = type==='gvg' ? 'bg-red-50 text-red-800 border-b border-red-100' : 'bg-blue-50 text-blue-800 border-b border-blue-100';
 
             const rows = (g.members||[]).map(m => {
@@ -428,8 +398,43 @@ const App = {
                 else if((mem.role||'').includes('輔助')) { border='border-l-green-400'; color='text-green-500'; }
                 
                 let action = '';
+                // [修復] GVG 替補選單邏輯
                 if(type==='gvg') {
-                    action = `<div class="flex gap-2">
+                    let subUI = "";
+                    if (status === 'leave') {
+                        if (canEdit) { 
+                            let busyIds = [];
+                            if (g.date) {
+                                this.groups.forEach(og => {
+                                    if ((og.type||'gvg') === 'gvg' && og.date === g.date && og.id !== g.id) {
+                                        og.members.forEach(gm => {
+                                            const mid = typeof gm === 'string' ? gm : gm.id;
+                                            busyIds.push(mid);
+                                            if (typeof gm === 'object' && gm.subId) busyIds.push(gm.subId);
+                                        });
+                                    }
+                                });
+                            }
+                            const available = this.members.filter(x => {
+                                const inCurrent = g.members.some(gm => (typeof gm==='string'?gm:gm.id) === x.id);
+                                const isBusy = busyIds.includes(x.id);
+                                const isMe = (m.subId === x.id);
+                                if (isMe) return true;
+                                if (inCurrent) return false;
+                                if (isBusy) return false;
+                                return true;
+                            });
+                            
+                            const opts = '<option value="">選擇替補...</option>' + available.map(om => `<option value="${om.id}" ${om.id === m.subId ? 'selected' : ''}>${om.gameName}</option>`).join('');
+                            subUI = `<select class="text-xs border rounded p-1 w-24 mr-2" onchange="app.updateGvgSub('${g.id}', '${id}', this.value)" onclick="event.stopPropagation()">${opts}</select>`;
+                        } else if (m.subId) {
+                            const subMem = this.members.find(x => x.id === m.subId);
+                            if (subMem) subUI = `<span class="text-blue-500 text-xs mr-2 font-bold">⇋ ${subMem.gameName}</span>`;
+                        }
+                    }
+
+                    action = `<div class="flex gap-2 items-center">
+                        ${subUI}
                         <div class="gvg-light bg-light-yellow ${status==='leave'?'active':''}" title="請假"></div>
                         <div class="gvg-light ${status==='ready'?'bg-light-green active':'bg-light-red'}" onclick="event.stopPropagation(); app.toggleGvgStatus('${g.id}','${id}','ready')"></div>
                     </div>`;
@@ -466,6 +471,20 @@ const App = {
         g.members[idx]=m;
         if(this.mode==='firebase') this.db.collection(COLLECTION_NAMES.GROUPS).doc(gid).update({members:g.members});
         else this.saveLocal('groups');
+    },
+    
+    // [修復] 替補更新函式
+    updateGvgSub: function(gid, mid, subId) {
+        const g = this.groups.find(x=>x.id===gid); if(!g) return;
+        const idx = g.members.findIndex(m => (typeof m==='string'?m:m.id)===mid); if(idx===-1) return;
+        let m = g.members[idx]; if(typeof m==='string') m={id:m, status:'pending'};
+        
+        m.subId = subId;
+        g.members[idx]=m;
+        
+        if(this.mode==='firebase') this.db.collection(COLLECTION_NAMES.GROUPS).doc(gid).update({members:g.members});
+        else this.saveLocal('groups');
+        this.showToast("替補已更新");
     },
 
     // --- Squad Modal ---

@@ -62,6 +62,7 @@
                 <div onclick="app.switchTab('members')" class="menu-card group border-l-4 border-l-blue-500 p-4 cursor-pointer hover:bg-slate-50"><div class="flex justify-between items-center"><div class="flex items-center gap-4"><div class="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center text-xl"><i class="fas fa-book-open"></i></div><div><h3 class="text-lg font-black text-slate-700">成員名冊</h3><p class="text-xs text-slate-400 font-bold tracking-wider">MEMBER LIST</p></div></div><i class="fas fa-chevron-right text-slate-300"></i></div></div>
                 <div onclick="app.switchTab('gvg')" class="menu-card group border-l-4 border-l-red-500 p-4 cursor-pointer hover:bg-slate-50"><div class="flex justify-between items-center"><div class="flex items-center gap-4"><div class="w-12 h-12 rounded-2xl bg-red-50 text-red-600 flex items-center justify-center text-xl"><i class="fas fa-fist-raised"></i></div><div><h3 class="text-lg font-black text-slate-700">團體戰 (GVG)</h3><p class="text-xs text-slate-400 font-bold tracking-wider">RAID BATTLE</p></div></div><i class="fas fa-chevron-right text-slate-300"></i></div></div>
                 <div onclick="app.switchTab('leave')" class="menu-card group border-l-4 border-l-orange-500 p-4 cursor-pointer hover:bg-slate-50"><div class="flex justify-between items-center"><div class="flex items-center gap-4"><div class="w-12 h-12 rounded-2xl bg-orange-50 text-orange-600 flex items-center justify-center text-xl"><i class="fas fa-calendar-times"></i></div><div><h3 class="text-lg font-black text-slate-700">請假管理</h3><p class="text-xs text-slate-400 font-bold tracking-wider">LEAVE REQUEST</p></div></div><i class="fas fa-chevron-right text-slate-300"></i></div></div>
+                <div onclick="app.switchTab('groups')" class="menu-card group border-l-4 border-l-green-500 p-4 cursor-pointer hover:bg-slate-50"><div class="flex justify-between items-center"><div class="flex items-center gap-4"><div class="w-12 h-12 rounded-2xl bg-green-50 text-green-600 flex items-center justify-center text-xl"><i class="fas fa-campground"></i></div><div><h3 class="text-lg font-black text-slate-700">固定團</h3><p class="text-xs text-slate-400 font-bold tracking-wider">DUNGEONS</p></div></div><i class="fas fa-chevron-right text-slate-300"></i></div></div>
                 <div onclick="app.switchTab('activity')" class="menu-card group border-l-4 border-l-yellow-500 p-4 cursor-pointer hover:bg-slate-50"><div class="flex justify-between items-center"><div class="flex items-center gap-4"><div class="w-12 h-12 rounded-2xl bg-yellow-50 text-yellow-600 flex items-center justify-center text-xl"><i class="fas fa-trophy"></i></div><div><h3 class="text-lg font-black text-slate-700">活動獎勵</h3><p class="text-xs text-slate-400 font-bold tracking-wider">REWARDS</p></div></div><i class="fas fa-chevron-right text-slate-300"></i></div></div>
             </div>
         </div>
@@ -120,7 +121,10 @@
         </div>
 
         <div id="view-groups" class="hidden">
-            <div class="flex justify-between items-center mb-4"><h2 class="text-xl font-bold text-slate-700" id="groupViewTitle">分組列表</h2></div>
+            <div class="mb-4">
+                <div class="flex justify-between items-center"><h2 class="text-xl font-bold text-slate-700" id="groupViewTitle">分組列表</h2></div>
+                <p class="text-xs text-slate-400 mt-1 font-bold">習慣固定人員團進團出。請填表，會長會依狀況排團體戰隊伍。</p>
+            </div>
             <div id="groupControlPanel" class="bg-white p-4 rounded-2xl shadow-sm border-l-4 border-l-red-500 border-slate-100 mb-4 flex justify-between items-center">
                 <input type="text" id="groupSearchInput" oninput="app.renderSquads()" placeholder="搜尋隊伍..." class="w-full bg-slate-50 border-0 text-slate-800 rounded-xl px-4 py-2.5 outline-none font-bold">
             </div>
