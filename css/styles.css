@@ -1,29 +1,14 @@
 /* ======================================================
-   styles.css — Final Light Version (無黑底版)
+   styles.css — Final Polished
    ====================================================== */
-
-/* --- Global --- */
-body {
-  background-color: #f8fafc; /* 更乾淨的背景 */
-  color: #334155;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-  -webkit-tap-highlight-color: transparent;
-  overflow-x: hidden;
-}
-
+body { background-color: #f8fafc; color: #334155; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; -webkit-tap-highlight-color: transparent; overflow-x: hidden; }
 input, select, textarea { font-size: 16px !important; }
 .scroll-hide { -ms-overflow-style: none; scrollbar-width: none; }
 .scroll-hide::-webkit-scrollbar { display: none; }
 
-/* --- Nav Pills --- */
-.nav-pill {
-  padding: 8px 16px; font-weight: 700; color: #64748b; border-radius: 20px;
-  transition: all 0.2s ease; white-space: nowrap; font-size: 0.9rem;
-  background: rgba(255, 255, 255, 0.6); border: 1px solid transparent;
-}
+.nav-pill { padding: 8px 16px; font-weight: 700; color: #64748b; border-radius: 20px; transition: all 0.2s ease; white-space: nowrap; font-size: 0.9rem; background: rgba(255, 255, 255, 0.6); border: 1px solid transparent; }
 .nav-pill.active { color: #fff; transform: translateY(-1px); }
 
-/* Tab Colors */
 #tab-members.active { background-color: #3b82f6; box-shadow: 0 4px 10px -2px rgba(59, 130, 246, 0.3); }
 #tab-gvg.active { background-color: #ef4444; box-shadow: 0 4px 10px -2px rgba(239, 68, 68, 0.3); }
 #tab-leave.active { background-color: #f97316; box-shadow: 0 4px 10px -2px rgba(249, 115, 22, 0.3); }
@@ -31,22 +16,13 @@ input, select, textarea { font-size: 16px !important; }
 #tab-activity.active { background-color: #eab308; box-shadow: 0 4px 10px -2px rgba(234, 179, 8, 0.3); }
 #tab-home.active { background-color: #475569; box-shadow: 0 4px 10px -2px rgba(71, 85, 105, 0.3); }
 
-/* --- Card System --- */
-.card, .menu-card, .squad-card, .activity-card {
-  background: #ffffff; border-radius: 16px; border: 1px solid #f1f5f9;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.02); overflow: hidden;
-  transition: transform 0.15s ease;
-}
+.card, .menu-card, .squad-card, .activity-card { background: #ffffff; border-radius: 16px; border: 1px solid #f1f5f9; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.02); overflow: hidden; transition: transform 0.15s ease; }
 .card:active { transform: scale(0.99); }
 
-/* --- Member Card --- */
 .member-card { display: flex; align-items: stretch; min-height: 90px; border-left-width: 4px; }
-.job-icon-box {
-  width: 56px; display: flex; align-items: center; justify-content: center;
-  font-size: 1.6rem; background-color: #f8fafc; border-right: 1px solid #f1f5f9; color: #94a3b8;
-}
+.job-icon-box { width: 56px; display: flex; align-items: center; justify-content: center; font-size: 1.6rem; background-color: #f8fafc; border-right: 1px solid #f1f5f9; color: #94a3b8; }
 
-/* 職業顏色 (保留) */
+/* Jobs */
 .border-job-knight, .border-job-騎士 { border-left-color: #ff9999; }
 .border-job-crusader, .border-job-十字軍 { border-left-color: #ff6666; }
 .border-job-blacksmith, .border-job-鐵匠 { border-left-color: #ffcc99; }
@@ -63,29 +39,19 @@ input, select, textarea { font-size: 16px !important; }
 .border-job-rogue, .border-job-流氓 { border-left-color: #b366ff; }
 .border-job-default, .border-job-初心者 { border-left-color: #cbd5e1; }
 
-/* Tags */
 .tag { font-size: 0.65rem; padding: 2px 6px; border-radius: 6px; font-weight: 800; }
 .tag-dps { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; }
 .tag-sup { background: #f0fdf4; color: #15803d; border: 1px solid #bbf7d0; }
 .tag-tank { background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; }
 
-/* GVG Lights */
-.gvg-light {
-  width: 14px; height: 14px; border-radius: 50%; cursor: pointer;
-  border: 2px solid #fff; box-shadow: 0 0 0 1px #cbd5e1;
-  transition: all 0.2s ease; opacity: 0.3; filter: grayscale(100%);
-}
+.gvg-light { width: 14px; height: 14px; border-radius: 50%; cursor: pointer; border: 2px solid #fff; box-shadow: 0 0 0 1px #cbd5e1; transition: all 0.2s ease; opacity: 0.3; filter: grayscale(100%); }
 .gvg-light:hover { transform: scale(1.2); opacity: 0.8; }
 .gvg-light.active { opacity: 1; filter: grayscale(0%); transform: scale(1.1); box-shadow: 0 0 0 2px rgba(255,255,255,0.8), 0 0 8px currentColor; }
-
 .bg-light-red { background-color: #ef4444; color: #ef4444; }
 .bg-light-green { background-color: #22c55e; color: #22c55e; }
 .bg-light-yellow { background-color: #fbbf24; color: #fbbf24; }
 
-/* Utils */
 .admin-mode-on { color: #3b82f6 !important; background-color: #eff6ff; border: 1px solid #bfdbfe !important; }
 .animate-fade-in { animation: fadeIn 0.4s ease-out forwards; }
 @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
-
-/* 讓列表線條更好看 */
 .squad-member-row:last-child { border-bottom: none; }

@@ -1,5 +1,5 @@
 /* =====================================================
-   app.js — Production v3.1 (Light Header Fix)
+   app.js — Production v3.2 (Sort Fix + Leave FAB Fix)
    ===================================================== */
 
 if (typeof window.AppConfig === 'undefined') { alert("系統錯誤：設定檔未載入。"); }
@@ -21,6 +21,7 @@ const App = {
     
     mode: 'demo', userRole: 'guest', isRendering: false,
     CLEANUP_DAYS: 14,
+    BASE_TIME: new Date('2023-01-01').getTime(),
 
     isAdminOrMaster: function() { return ['master', 'admin'].includes(this.userRole); },
 
@@ -47,9 +48,29 @@ const App = {
         });
     },
 
+    // [修正] 資料標準化：確保原始成員依照 SEED 順序，新成員依照時間
     normalizeMemberData: function(m) {
         if (!m) return null;
-        return { ...m, role: m.role || '待定', mainClass: m.mainClass || '初心者', createdAt: m.createdAt || Date.now() };
+        
+        let created = m.createdAt;
+        
+        // 如果沒有建立時間 (通常是原始資料)，則依照 SEED_DATA 的索引給予一個舊時間
+        if (!created) {
+            const seedIndex = Cfg.SEED_DATA.findIndex(seed => seed.id === m.id);
+            if (seedIndex !== -1) {
+                // 給予一個固定的舊時間，加上索引值確保順序
+                created = this.BASE_TIME + (seedIndex * 1000); 
+            } else {
+                created = Date.now(); // 找不到就當作現在新增的
+            }
+        }
+
+        return { 
+            ...m, 
+            role: m.role || '待定', 
+            mainClass: m.mainClass || '初心者', 
+            createdAt: created 
+        };
     },
 
     loadLocalState: function() {
@@ -181,6 +202,7 @@ const App = {
         this.scheduleRender();
     },
 
+    // [修正] 主按鈕行為：加入請假頁面的支援
     handleMainAction: function() {
         if(this.currentTab==='members') this.openAddModal();
         else if(this.currentTab==='gvg'||this.currentTab==='groups') {
@@ -189,6 +211,8 @@ const App = {
         } else if(this.currentTab==='activity') {
             if(this.isAdminOrMaster()) this.openActivityModal();
             else this.showToast("權限不足", "error");
+        } else if (this.currentTab === 'leave') {
+            this.toggleLeaveForm();
         }
     },
     
@@ -343,14 +367,41 @@ const App = {
         else { if(this.mode==='firebase') await this.db.collection(COLLECTION_NAMES.MEMBERS).doc(id).update(data); else { const idx=this.members.findIndex(m=>m.id===id); this.members[idx]={...this.members[idx], ...data}; this.saveLocal('members'); } }
         this.closeModal('editModal'); this.showToast("成員已儲存");
     },
+
+    // [修正] 刪除成員：連動移除隊伍成員，但「保留」活動得獎紀錄
     deleteMember: async function(id) {
-        if(!confirm("確定刪除?")) return;
-        if(this.mode==='firebase') await this.db.collection(COLLECTION_NAMES.MEMBERS).doc(id).delete();
-        else { this.members=this.members.filter(m=>m.id!==id); this.saveLocal('members'); }
-        this.closeModal('editModal'); this.showToast("已刪除");
+        if (!confirm("確定要刪除這位成員嗎？\n(注意：將從所有隊伍中移除，但保留活動得獎紀錄)")) return;
+
+        if (this.mode === 'firebase') {
+            await this.db.collection(COLLECTION_NAMES.MEMBERS).doc(id).delete();
+        }
+        
+        // 1. 從成員列表移除
+        this.members = this.members.filter(m => m.id !== id);
+        
+        // 2. 連動刪除：從「隊伍 (Groups/GVG)」中移除該成員
+        this.groups.forEach(g => {
+            const originalLength = g.members.length;
+            g.members = g.members.filter(m => (typeof m === 'string' ? m : m.id) !== id);
+            
+            // 如果隊長被刪除了，清空隊長欄位
+            if (g.leaderId === id) g.leaderId = null;
+
+            if (this.mode === 'firebase' && g.members.length !== originalLength) {
+                this.db.collection(COLLECTION_NAMES.GROUPS).doc(g.id).update({ 
+                    members: g.members, leaderId: g.leaderId 
+                });
+            }
+        });
+        
+        if (this.mode === 'demo') this.saveLocal();
+        
+        this.closeModal('editModal'); 
+        this.showToast("成員已刪除 (保留活動紀錄)");
+        this.renderMembers();
     },
 
-    // --- Squads / GVG (Visual Updated - White Header) ---
+    // --- Squads / GVG ---
     renderSquads: function() {
         const type = this.currentTab==='gvg'?'gvg':'groups';
         const search = (document.getElementById('groupSearchInput').value||'').toLowerCase();
@@ -365,7 +416,6 @@ const App = {
             const dateBadge = g.date ? `<span class="bg-white/50 border border-slate-200 text-slate-600 text-[10px] px-2 py-0.5 rounded font-bold mr-2">${g.date}</span>` : '';
             const editBtn = ['master','admin','commander'].includes(this.userRole) ? `<button onclick="app.openSquadModal('${g.id}')" class="text-slate-400 hover:text-slate-600"><i class="fas fa-cog"></i></button>` : '';
             
-            // 這裡修改了標題配色：從黑底改成淡色系
             const headerClass = type==='gvg' ? 'bg-red-50 text-red-800 border-b border-red-100' : 'bg-blue-50 text-blue-800 border-b border-blue-100';
 
             const rows = (g.members||[]).map(m => {

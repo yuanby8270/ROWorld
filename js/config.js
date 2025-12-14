@@ -1,10 +1,5 @@
 // config.js
-
-// 應用程式的靜態配置、集合名稱和初始資料。
-
-// --- 全域應用程式設定 ---
 const FIREBASE_CONFIG = {
-    // 恢復 API Key
     apiKey: "AIzaSyCxVEcgftiu7qmHhgLV-XaLzf6naBhaf-k",
     authDomain: "ro123-aae1e.firebaseapp.com",
     projectId: "ro123-aae1e",
@@ -16,15 +11,13 @@ const FIREBASE_CONFIG = {
 
 const APP_ENV = 'production';
 
-// --- Firebase / Firestore Configuration ---
 const COLLECTION_NAMES = {
     MEMBERS: 'members',
     GROUPS: 'groups',
     ACTIVITIES: 'activities',
-    LEAVE_REQUESTS: 'leave_requests' // [新增] 請假單集合
+    LEAVE_REQUESTS: 'leaves'
 };
 
-// --- Job / Role Configuration ---
 const JOB_STYLES = [
     { key: ['騎士'], class: 'bg-job-knight', icon: 'fa-shield-alt' }, { key: ['十字軍'], class: 'bg-job-crusader', icon: 'fa-cross' }, { key: ['鐵匠', '商人'], class: 'bg-job-blacksmith', icon: 'fa-hammer' },
     { key: ['獵人', '弓箭手'], class: 'bg-job-hunter', icon: 'fa-crosshairs' }, { key: ['詩人'], class: 'bg-job-bard', icon: 'fa-music' }, { key: ['煉金'], class: 'bg-job-alchemist', icon: 'fa-flask' },
@@ -41,7 +34,7 @@ const JOB_STRUCTURE = {
     "槍手": ["一般", "其他"], "初心者": ["超級初心者", "其他"]
 };
 
-// --- Seed Data (初始資料) ---
+// 這是原始排序依據，請保持此順序
 const SEED_DATA = [
     { id: "m01", lineName: "poppy🐶", gameName: "YT清燉小羔羊", mainClass: "神官(讚美)", role: "輔助", rank: "會長", intro: "公會唯一清流 出淤泥而不染" },
     { id: "m02", lineName: "#Yuan", gameName: "沐沐", mainClass: "神官(讚美)", role: "輔助", rank: "資料管理員", intro: "" },
@@ -119,30 +112,9 @@ const SEED_DATA = [
 ];
 
 const SEED_GROUPS = [];
+const SEED_ACTIVITIES = [];
+const APP_VERSION = '7.5';
 
-const SEED_ACTIVITIES = [
-    {
-        id: "a01",
-        name: "聖誕節造型大賽",
-        note: "評選最佳聖誕裝扮的成員，可獲得隨機稀有卡片一張。",
-        winners: [
-            { memberId: "m01", claimed: true, claimedBy: "poppy🐶", claimedAt: Date.now() - 86400000 * 3 },
-            { memberId: "m20", claimed: false, claimedBy: null, claimedAt: null }
-        ]
-    },
-    {
-        id: "a02",
-        name: "GVG 傷害王競賽",
-        note: "輸出榜第一名的獎勵：現金 1,000,000 Zeny。",
-        winners: [
-            { memberId: "m32", claimed: true, claimedBy: "poppy🐶", claimedAt: Date.now() }
-        ]
-    }
-];
-
-const APP_VERSION = '7.1'; // Bump version
-
-// 將所有配置變數掛載到全域物件 (window.AppConfig)，供 app.js 存取
 window.AppConfig = {
     FIREBASE_CONFIG,
     APP_ENV,
