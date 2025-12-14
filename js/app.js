@@ -1,5 +1,5 @@
 // js/app.js
-// Production v6.1 - Remove Member Borders in Squads (Clean UI) & Fix Layout
+// Production v7.0 Enterprise - Backup/Restore & Clean GVG UI
 
 // 1. 強制檢查 Config
 if (typeof window.AppConfig === 'undefined') {
@@ -155,8 +155,8 @@ const App = {
         if (this.userRole === 'master') { if (rankSelect) rankSelect.disabled = false; if (lockIcon) lockIcon.className = "fas fa-unlock text-blue-500 text-xs ml-2"; } 
         else { if (rankSelect) rankSelect.disabled = true; if (lockIcon) lockIcon.className = "fas fa-lock text-slate-300 text-xs ml-2"; }
         const addSubBtn = document.getElementById('addSubjectBtn'), delSubBtn = document.getElementById('delSubjectBtn');
-        if (addSubBtn) { if (this.userRole === 'master') addSubBtn.classList.remove('hidden'); else addSubBtn.classList.add('hidden'); }
-        if (delSubBtn) { if (this.userRole === 'master') delSubBtn.classList.remove('hidden'); else delSubBtn.classList.add('hidden'); }
+        if (addSubBtn) { if (['master', 'admin'].includes(this.userRole)) addSubBtn.classList.remove('hidden'); else addSubBtn.classList.add('hidden'); }
+        if (delSubBtn) { if (['master', 'admin'].includes(this.userRole)) delSubBtn.classList.remove('hidden'); else delSubBtn.classList.add('hidden'); }
         this.render();
     },
 
@@ -192,7 +192,7 @@ const App = {
         
         const activityWarning = document.getElementById('activityAdminWarning'), addActivityBtn = document.getElementById('addActivityBtn');
         if (tab === 'activity') {
-            if (this.userRole === 'master') { if(addActivityBtn) addActivityBtn.classList.remove('hidden'); if(activityWarning) activityWarning.classList.add('hidden'); } 
+            if (['master', 'admin'].includes(this.userRole)) { if(addActivityBtn) addActivityBtn.classList.remove('hidden'); if(activityWarning) activityWarning.classList.add('hidden'); } 
             else { if(addActivityBtn) addActivityBtn.classList.add('hidden'); if(activityWarning) activityWarning.classList.remove('hidden'); }
         }
         
@@ -207,8 +207,8 @@ const App = {
             else alert("權限不足：僅有管理人員可建立隊伍");
         }
         else if(this.currentTab === 'activity') {
-            if(this.userRole === 'master') this.openActivityModal();
-            else alert("權限不足：僅有會長可建立活動");
+            if(['master', 'admin'].includes(this.userRole)) this.openActivityModal();
+            else alert("權限不足：僅有會長/管理員可建立活動");
         }
     },
     
@@ -217,6 +217,64 @@ const App = {
         else if (this.currentTab === 'gvg' || this.currentTab === 'groups') this.renderSquads();
         else if (this.currentTab === 'activity') this.renderActivities();
         const cnt = document.querySelector('#view-home .ro-menu-btn .ro-btn-content p'); if (cnt) cnt.innerText = `Guild Members (${this.members.length})`;
+    },
+
+    // 備份與還原功能 (Enterprise Feature)
+    backupData: function() {
+        if(!['master', 'admin'].includes(this.userRole)) { alert("權限不足：僅管理員可備份"); return; }
+        const data = {
+            members: this.members,
+            groups: this.groups,
+            activities: this.activities,
+            leaves: this.leaves,
+            history: this.history,
+            themes: this.raidThemes,
+            timestamp: Date.now(),
+            version: '7.0'
+        };
+        const blob = new Blob([JSON.stringify(data, null, 2)], {type : 'application/json'});
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        const date = new Date().toISOString().split('T')[0];
+        a.href = url;
+        a.download = `ROW_Backup_${date}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    },
+
+    triggerRestore: function() {
+        if(!['master', 'admin'].includes(this.userRole)) { alert("權限不足"); return; }
+        document.getElementById('restoreInput').click();
+    },
+
+    handleRestore: function(input) {
+        const file = input.files[0];
+        if(!file) return;
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            try {
+                const data = JSON.parse(e.target.result);
+                if(confirm(`確定要還原資料嗎？\n備份時間: ${new Date(data.timestamp).toLocaleString()}\n成員數: ${data.members.length}`)) {
+                    this.members = data.members || [];
+                    this.groups = data.groups || [];
+                    this.activities = data.activities || [];
+                    this.leaves = data.leaves || [];
+                    this.history = data.history || [];
+                    this.raidThemes = data.themes || ['GVG 攻城戰', '公會副本', '野外王'];
+                    
+                    this.saveLocal('all');
+                    alert("還原成功！頁面將重新整理。");
+                    location.reload();
+                }
+            } catch(err) {
+                alert("還原失敗：檔案格式錯誤");
+                console.error(err);
+            }
+        };
+        reader.readAsText(file);
+        input.value = ''; // Reset input
     },
 
     toggleLeaveForm: function() { document.getElementById('leaveFormContainer').classList.toggle('hidden'); },
@@ -343,7 +401,7 @@ const App = {
         this.logChange('成員刪除', `ID: ${id}`, id); this.closeModal('editModal');
     },
 
-    // 2. 修正 GVG 團體戰版面跑位 & 移除成員邊框顏色 (Optimization Here)
+    // GVG 團體戰版面優化 (Clean Style & Layout Fix)
     renderSquads: function() {
         const type = this.currentTab === 'gvg' ? 'gvg' : 'groups';
         const search = document.getElementById('groupSearchInput').value.toLowerCase();
@@ -394,7 +452,7 @@ const App = {
                 if (this.currentSquadRoleFilter !== 'all') { const filterKey = this.currentSquadRoleFilter; const match = m.role.includes(filterKey) || (filterKey === '坦' && m.mainClass.includes('坦')); if (!match) return ''; }
                 const job = (m.mainClass || '').split('(')[0]; 
                 
-                // [Modified] 移除左側邊框顏色，只保留文字顏色識別
+                // 優化：只使用文字顏色區分，移除左側粗邊框
                 let roleColor = 'text-slate-400';
                 if (m.role.includes('輸出')) { roleColor = 'text-red-500'; }
                 else if (m.role.includes('坦')) { roleColor = 'text-blue-500'; }
@@ -416,7 +474,7 @@ const App = {
                     actionUI = `<div class="flex items-center gap-2">${subUI}<div class="gvg-light bg-light-yellow ${m.status === 'leave' ? 'active' : ''}" title="請假"></div><div class="gvg-light ${m.status === 'ready' ? 'bg-light-green active' : 'bg-light-red'}" title="狀態" onclick="event.stopPropagation(); app.toggleGvgStatus('${group.id}', '${m.id}', 'ready_toggle')"></div></div>`;
                 } else { actionUI = `<span class="text-xs text-slate-300 font-mono">ID:${m.id.slice(-3)}</span>`; }
 
-                // [Modified] 移除 border-l-4 和 borderColor 變數
+                // 移除 border-l-4，讓介面更乾淨
                 return `<div class="flex items-center justify-between text-sm py-3 border-b border-slate-100 last:border-b-0 hover:bg-slate-50 px-4 transition ${rowClass}"><div class="flex items-center gap-3 min-w-0"><div class="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-xs font-bold ${roleColor}">${m.role.substring(0,1)}</div><div class="flex flex-col min-w-0"><span class="text-slate-800 font-bold truncate member-name">${m.gameName}</span><span class="text-[10px] text-slate-400 font-mono">${job}</span></div></div>${actionUI}</div>`;
             }).join('');
 
@@ -541,7 +599,7 @@ const App = {
         this.closeModal('squadModal');
     },
 
-    // 3. Activity 搜尋功能 & 渲染
+    // Activity 搜尋 & 渲染
     renderActivities: function() {
         const list = document.getElementById('activityList'), emptyMsg = document.getElementById('noActivitiesMsg');
         
@@ -565,29 +623,29 @@ const App = {
         if(emptyMsg) emptyMsg.classList.add('hidden');
 
         list.innerHTML = filteredActivities.map(act => {
-            const winnersList = (act.winners || []).map((w, idx) => { const mem = this.members.find(m => m.id === w.memberId); const name = mem ? mem.gameName : 'Unknown'; const job = mem ? mem.mainClass : '-'; let timeStr = ""; if(w.claimedAt) { const d = new Date(w.claimedAt); timeStr = `${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`; } const isMaster = this.userRole === 'master'; const lightClass = w.claimed ? 'claimed' : 'unclaimed'; const clickAction = (isMaster && !w.claimed) ? `onclick="app.handleClaimReward('${act.id}', ${idx})"` : ''; const titleText = w.claimed ? `已於 ${timeStr} 領取` : (isMaster ? '點擊發放獎勵 (立即紀錄)' : '未領取'); return `<div class="flex justify-between items-center py-3 border-b border-slate-100 last:border-0"><div class="flex flex-col"><span class="font-bold text-slate-700 text-sm">${name}</span><span class="text-xs text-slate-400">${job}</span>${w.claimed ? `<span class="text-[10px] text-green-600 font-mono mt-1">${timeStr} 已領</span>` : ''}</div><div class="status-light ${lightClass}" ${clickAction} title="${titleText}"></div></div>`; }).join('');
-            return `<div class="bg-white rounded-xl border border-yellow-200 shadow-sm overflow-hidden flex flex-col"><div class="bg-gradient-to-r from-orange-100 to-yellow-50 p-4 border-b border-yellow-200 flex justify-between items-start"><div><h3 class="font-bold text-lg text-slate-800">${act.name}</h3><p class="text-xs text-yellow-800 font-bold mt-1 bg-yellow-200 px-2 py-1 rounded inline-block">${act.note || '總獎勵詳見備註'}</p></div>${this.userRole === 'master' ? `<button onclick="app.openActivityModal('${act.id}')" class="text-slate-400 hover:text-blue-500"><i class="fas fa-edit"></i></button>` : ''}</div><div class="p-4 bg-white flex-grow">${winnersList.length ? winnersList : '<p class="text-center text-slate-400 text-sm py-4">名單確認中...</p>'}</div></div>`;
+            const winnersList = (act.winners || []).map((w, idx) => { const mem = this.members.find(m => m.id === w.memberId); const name = mem ? mem.gameName : 'Unknown'; const job = mem ? mem.mainClass : '-'; let timeStr = ""; if(w.claimedAt) { const d = new Date(w.claimedAt); timeStr = `${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`; } const isMaster = ['master', 'admin'].includes(this.userRole); const lightClass = w.claimed ? 'claimed' : 'unclaimed'; const clickAction = (isMaster && !w.claimed) ? `onclick="app.handleClaimReward('${act.id}', ${idx})"` : ''; const titleText = w.claimed ? `已於 ${timeStr} 領取` : (isMaster ? '點擊發放獎勵 (立即紀錄)' : '未領取'); return `<div class="flex justify-between items-center py-3 border-b border-slate-100 last:border-0"><div class="flex flex-col"><span class="font-bold text-slate-700 text-sm">${name}</span><span class="text-xs text-slate-400">${job}</span>${w.claimed ? `<span class="text-[10px] text-green-600 font-mono mt-1">${timeStr} 已領</span>` : ''}</div><div class="status-light ${lightClass}" ${clickAction} title="${titleText}"></div></div>`; }).join('');
+            return `<div class="bg-white rounded-xl border border-yellow-200 shadow-sm overflow-hidden flex flex-col"><div class="bg-gradient-to-r from-orange-100 to-yellow-50 p-4 border-b border-yellow-200 flex justify-between items-start"><div><h3 class="font-bold text-lg text-slate-800">${act.name}</h3><p class="text-xs text-yellow-800 font-bold mt-1 bg-yellow-200 px-2 py-1 rounded inline-block">${act.note || '總獎勵詳見備註'}</p></div>${['master', 'admin'].includes(this.userRole) ? `<button onclick="app.openActivityModal('${act.id}')" class="text-slate-400 hover:text-blue-500"><i class="fas fa-edit"></i></button>` : ''}</div><div class="p-4 bg-white flex-grow">${winnersList.length ? winnersList : '<p class="text-center text-slate-400 text-sm py-4">名單確認中...</p>'}</div></div>`;
         }).join('');
     },
     handleClaimReward: async function(actId, winnerIdx) {
-        if(this.userRole !== 'master') return; const actIndex = this.activities.findIndex(a => a.id === actId); if(actIndex === -1) return; let act = this.activities[actIndex]; if(!act.winners[winnerIdx]) return; act.winners[winnerIdx].claimed = true; act.winners[winnerIdx].claimedAt = Date.now(); act.winners[winnerIdx].claimedBy = 'Master';
+        if(!['master', 'admin'].includes(this.userRole)) return; const actIndex = this.activities.findIndex(a => a.id === actId); if(actIndex === -1) return; let act = this.activities[actIndex]; if(!act.winners[winnerIdx]) return; act.winners[winnerIdx].claimed = true; act.winners[winnerIdx].claimedAt = Date.now(); act.winners[winnerIdx].claimedBy = this.userRole;
         if (this.mode === 'firebase') { await this.db.collection(Cfg.COLLECTION_NAMES.ACTIVITIES).doc(actId).update({ winners: act.winners }); } else { this.activities[actIndex] = act; this.saveLocal('activities'); }
         this.logChange('領取獎勵', `活動 ${act.name}`, 'SYSTEM');
     },
     openActivityModal: function(id) {
-        if (this.userRole !== 'master') return; document.getElementById('activityId').value = id || ''; document.getElementById('activityModalTitle').innerText = id ? '編輯' : '新增'; this.currentActivityWinners = [];
+        if (!['master', 'admin'].includes(this.userRole)) return; document.getElementById('activityId').value = id || ''; document.getElementById('activityModalTitle').innerText = id ? '編輯' : '新增'; this.currentActivityWinners = [];
         if (id) { const act = this.activities.find(a => a.id === id); if (act) { document.getElementById('activityName').value = act.name; document.getElementById('activityNote').value = act.note; this.currentActivityWinners = act.winners ? [...act.winners] : []; document.getElementById('deleteActivityBtnContainer').innerHTML = `<button type="button" onclick="app.deleteActivity('${id}')" class="text-red-500 text-sm hover:underline">刪除活動</button>`; } } else { document.getElementById('activityName').value = ''; document.getElementById('activityNote').value = ''; document.getElementById('deleteActivityBtnContainer').innerHTML = ''; }
         this.renderActivityWinnersList(); app.showModal('activityModal');
     },
     renderActivityWinnersList: function() { const container = document.getElementById('winnerListContainer'); document.getElementById('winnerCount').innerText = this.currentActivityWinners.length; if (this.currentActivityWinners.length === 0) { container.innerHTML = '<p class="text-center text-slate-400 py-6 text-sm">請選取得獎者。</p>'; return; } container.innerHTML = this.currentActivityWinners.map((w, idx) => { const mem = this.members.find(m => m.id === w.memberId); return `<div class="flex justify-between items-center bg-yellow-50 p-2 rounded border border-yellow-100"><span class="text-sm font-bold text-slate-700">${mem ? mem.gameName : 'Unknown'}</span><button onclick="app.removeWinner(${idx})" class="text-red-400 hover:text-red-600"><i class="fas fa-times"></i></button></div>`; }).join(''); },
     removeWinner: function(idx) { this.currentActivityWinners.splice(idx, 1); this.renderActivityWinnersList(); },
     saveActivity: async function() {
-        if (this.userRole !== 'master') return; const id = document.getElementById('activityId').value, name = document.getElementById('activityName').value, note = document.getElementById('activityNote').value; if (!name) { alert("請輸入活動名稱"); return; } const activityData = { name, note, winners: this.currentActivityWinners };
+        if (!['master', 'admin'].includes(this.userRole)) return; const id = document.getElementById('activityId').value, name = document.getElementById('activityName').value, note = document.getElementById('activityNote').value; if (!name) { alert("請輸入活動名稱"); return; } const activityData = { name, note, winners: this.currentActivityWinners };
         if (id) { if (this.mode === 'firebase') await this.db.collection(Cfg.COLLECTION_NAMES.ACTIVITIES).doc(id).update(activityData); else { const idx = this.activities.findIndex(a => a.id === id); if (idx !== -1) { this.activities[idx] = { ...this.activities[idx], ...activityData }; this.saveLocal('activities'); } } } 
         else { if (this.mode === 'firebase') await this.db.collection(Cfg.COLLECTION_NAMES.ACTIVITIES).add(activityData); else { activityData.id = 'act_' + Date.now(); this.activities.push(activityData); this.saveLocal('activities'); } }
         this.logChange(id ? '活動更新' : '新增活動', name, 'SYSTEM'); this.closeModal('activityModal'); this.renderActivities();
     },
-    deleteActivity: async function(id) { if (this.userRole !== 'master') return; if (!confirm("確定要刪除此活動嗎？")) return; if (this.mode === 'firebase') await this.db.collection(Cfg.COLLECTION_NAMES.ACTIVITIES).doc(id).delete(); else { this.activities = this.activities.filter(a => a.id !== id); this.saveLocal('activities'); } this.logChange('刪除活動', `ID: ${id}`, 'SYSTEM'); this.closeModal('activityModal'); this.renderActivities(); },
+    deleteActivity: async function(id) { if (!['master', 'admin'].includes(this.userRole)) return; if (!confirm("確定要刪除此活動嗎？")) return; if (this.mode === 'firebase') await this.db.collection(Cfg.COLLECTION_NAMES.ACTIVITIES).doc(id).delete(); else { this.activities = this.activities.filter(a => a.id !== id); this.saveLocal('activities'); } this.logChange('刪除活動', `ID: ${id}`, 'SYSTEM'); this.closeModal('activityModal'); this.renderActivities(); },
     
     openWinnerSelectionModal: function() { 
         this.tempWinnerSelection = [...this.currentActivityWinners]; 
