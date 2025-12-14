@@ -1,4 +1,4 @@
-// js/app.js - Part 1
+// js/app.js - Part 1: Core & Config
 import { jobData, firebaseConfig, initialMembers } from './config.js';
 
 const app = {
@@ -25,10 +25,8 @@ const app = {
     },
 
     loadFirebaseConfig() {
-        // 優先讀取 LocalStorage 的設定
         let config = localStorage.getItem('ro_firebase_config');
         
-        // 如果沒有，則使用 config.js 裡面的預設值
         if (!config && firebaseConfig) {
             config = JSON.stringify(firebaseConfig);
             localStorage.setItem('ro_firebase_config', config);
@@ -37,17 +35,16 @@ const app = {
         if (config) {
             try {
                 const parsedConfig = JSON.parse(config);
-                
-                // [修正] 防止 Firebase 重複初始化導致報錯
+                // 防止 Firebase 重複初始化
                 if (!firebase.apps.length) {
                     firebase.initializeApp(parsedConfig);
                 } else {
                     firebase.app(); 
                 }
-
                 this.db = firebase.firestore();
                 this.setupRealtimeListener();
-                document.getElementById('firebaseConfigInput').value = JSON.stringify(parsedConfig, null, 2);
+                const configInput = document.getElementById('firebaseConfigInput');
+                if(configInput) configInput.value = JSON.stringify(parsedConfig, null, 2);
             } catch (e) {
                 console.error("Firebase init failed:", e);
                 this.loadLocalData();
@@ -64,21 +61,17 @@ const app = {
         this.unsubscribe = this.db.collection('guildData').doc('main').onSnapshot(doc => {
             if (doc.exists) {
                 this.data = doc.data();
-                
-                // [修正] 關鍵資料結構防呆初始化，防止讀取時崩潰
+                // 資料防呆初始化
                 if (!this.data.members) this.data.members = initialMembers || [];
                 if (!this.data.history) this.data.history = []; 
                 if (!this.data.leaveRecords) this.data.leaveRecords = [];
                 if (!this.data.squads) this.data.squads = [];
                 if (!this.data.activities) this.data.activities = [];
 
-                // 防止資料庫為空時沒有成員
                 if ((this.data.members.length === 0) && initialMembers) {
-                     console.log("Database empty, merging initial members...");
                      this.data.members = initialMembers;
                 }
             } else {
-                // 文檔不存在，使用預設資料初始化
                 if (initialMembers) this.data.members = initialMembers;
                 this.saveData(); 
             }
@@ -99,10 +92,10 @@ const app = {
         } else {
             if (initialMembers) {
                 this.data.members = [...initialMembers];
-                this.showToast('已載入預設成員');
             }
         }
-        // 本地讀取也要做防呆
+        // 本地數據防呆
+        if (!this.data.members) this.data.members = [];
         if (!this.data.history) this.data.history = [];
         if (!this.data.leaveRecords) this.data.leaveRecords = [];
         if (!this.data.squads) this.data.squads = [];
@@ -162,8 +155,7 @@ const app = {
             </div>
         `).join('') || '<div class="text-center text-slate-400 py-4">無紀錄</div>';
         this.showModal('historyModal');
-    },
-
+    },// js/app.js - Part 2: UI & Members
     renderAll() {
         this.renderMembers();
         this.renderLeaveList();
@@ -172,28 +164,32 @@ const app = {
         this.checkAdminUI();
     },
 
-    // --- 修正後的 switchTab 函式 (請取代原有的) ---
     switchTab(tab) {
-        // 1. 隱藏所有主畫面
-        const views = document.querySelectorAll('main > div');
-        views.forEach(el => el.classList.add('hidden'));
+        // 1. 隱藏所有分頁
+        document.querySelectorAll('main > div').forEach(el => el.classList.add('hidden'));
 
-        // 2. 顯示目標畫面 (加入防呆檢查)
-        const targetView = document.getElementById(`view-${tab}`);
-        if (targetView) {
-            targetView.classList.remove('hidden');
-        } else {
-            console.error(`錯誤: 找不到 ID 為 view-${tab} 的分頁元素。請檢查 HTML。`);
-            return; // 找不到就停止，避免崩潰
+        // 2. 決定要顯示哪個分頁 ID (容錯處理)
+        let targetId = `view-${tab}`;
+        let targetEl = document.getElementById(targetId);
+
+        // 如果找不到 view-gvg，自動導向到 view-groups 以免崩潰
+        if (!targetEl && tab === 'gvg') {
+            targetId = 'view-groups'; 
+            targetEl = document.getElementById(targetId);
         }
-        
-        // 3. 更新導覽列按鈕樣式
+
+        if (targetEl) {
+            targetEl.classList.remove('hidden');
+        } else {
+            console.error(`Error: View element ${targetId} not found.`);
+            return; 
+        }
+
+        // 3. 更新按鈕樣式
         document.querySelectorAll('.nav-pill').forEach(el => {
             el.classList.remove('bg-slate-800', 'text-white', 'shadow-md');
             el.classList.add('text-slate-500', 'hover:bg-slate-100');
         });
-
-        // 4. 設定當前按鈕啟用狀態 (加入防呆檢查)
         const activeBtn = document.getElementById(`tab-${tab}`);
         if(activeBtn) {
             activeBtn.classList.add('bg-slate-800', 'text-white', 'shadow-md');
@@ -202,10 +198,9 @@ const app = {
 
         this.currentTab = tab;
         
-        // 5. 控制浮動按鈕 (FAB)
+        // 4. FAB 按鈕控制
         const fab = document.getElementById('mainActionBtn');
-        if (!fab) return; // 防呆
-
+        if (!fab) return;
         if (tab === 'home') {
             fab.classList.add('hidden');
         } else {
@@ -223,13 +218,11 @@ const app = {
 
     handleMainAction() {
         if (this.currentTab === 'members') this.openEditModal();
-        if (this.currentTab === 'gvg') this.switchTab('groups');
+        if (this.currentTab === 'gvg' || this.currentTab === 'groups') this.openSquadModal('fixed'); 
         if (this.currentTab === 'leave') this.toggleLeaveForm();
-        if (this.currentTab === 'groups') this.openSquadModal('fixed'); 
         if (this.currentTab === 'activity') this.openActivityModal();
     },
-    
-    // --- Auth & Admin UI ---
+
     openLoginModal() {
         if (this.user) {
             if(confirm('確定登出？')) {
@@ -291,12 +284,9 @@ const app = {
             if(actWarning) actWarning.classList.remove('hidden');
             if(addActBtn) addActBtn.classList.add('hidden');
         }
-
         this.renderMembers(); 
-        this.renderSquads();
-        this.renderActivities();
-    },// js/app.js - Part 2
-    // --- Members ---
+    },
+
     renderJobOptions() {
         const baseSel = document.getElementById('baseJobSelect');
         baseSel.innerHTML = Object.keys(jobData).map(j => `<option value="${j}">${j}</option>`).join('');
@@ -340,10 +330,14 @@ const app = {
         const rankOrder = { '會長': 0, '指揮官': 1, '資料管理員': 2, '成員': 3 };
         filtered.sort((a, b) => (rankOrder[a.rank] || 3) - (rankOrder[b.rank] || 3));
 
-        document.getElementById('memberCount').innerText = `Total: ${filtered.length}`;
-        document.getElementById('stat-dps').innerText = filtered.filter(m => m.role === '輸出').length;
-        document.getElementById('stat-sup').innerText = filtered.filter(m => m.role === '輔助').length;
-        document.getElementById('stat-tank').innerText = filtered.filter(m => m.role === '坦').length;
+        const countEl = document.getElementById('memberCount');
+        if(countEl) countEl.innerText = `Total: ${filtered.length}`;
+        const dpsEl = document.getElementById('stat-dps');
+        if(dpsEl) dpsEl.innerText = filtered.filter(m => m.role === '輸出').length;
+        const supEl = document.getElementById('stat-sup');
+        if(supEl) supEl.innerText = filtered.filter(m => m.role === '輔助').length;
+        const tankEl = document.getElementById('stat-tank');
+        if(tankEl) tankEl.innerText = filtered.filter(m => m.role === '坦').length;
 
         grid.innerHTML = '';
         if (filtered.length === 0) {
@@ -354,8 +348,11 @@ const app = {
                 const isVIP = m.rank !== '成員';
                 const vipBadge = isVIP ? `<span class="absolute top-2 right-2 px-2 py-0.5 rounded-full text-[10px] font-bold ${m.rank==='會長'?'bg-yellow-100 text-yellow-700':m.rank==='指揮官'?'bg-red-100 text-red-700':'bg-blue-100 text-blue-700'}">${m.rank}</span>` : '';
                 
+                // 修正：動態套用職業顏色樣式
+                const jobClass = `border-job-${m.baseJob}`;
+                
                 grid.innerHTML += `
-                <div onclick="app.openEditModal('${m.id}')" class="bg-white rounded-2xl p-4 shadow-sm border border-slate-100 relative hover:shadow-md transition cursor-pointer group">
+                <div onclick="app.openEditModal('${m.id}')" class="bg-white rounded-2xl p-4 shadow-sm border border-slate-100 border-l-4 ${jobClass} relative hover:shadow-md transition cursor-pointer group">
                     ${vipBadge}
                     <div class="flex items-center gap-3 mb-2">
                         <div class="w-10 h-10 rounded-xl flex items-center justify-center text-lg font-bold shadow-sm ${m.role==='輸出'?'bg-red-50 text-red-600':m.role==='輔助'?'bg-green-50 text-green-600':m.role==='坦'?'bg-blue-50 text-blue-600':'bg-gray-100 text-gray-500'}">
@@ -404,7 +401,7 @@ const app = {
         }
 
         if (id) {
-            const m = this.getMember(id);
+            const m = (this.data.members || []).find(x => x.id === id);
             if (m) {
                 document.getElementById('editId').value = m.id;
                 document.getElementById('gameName').value = m.gameName;
@@ -464,9 +461,8 @@ const app = {
     },
 
     deleteMember(id) {
-        // [修正] 刪除成員時一併刪除關聯資料，避免幽靈資料
         if(confirm('確定刪除此成員？以及其所有相關紀錄（請假、隊伍、活動）？')) {
-            const m = this.getMember(id);
+            const m = this.data.members.find(x => x.id === id);
             
             // 1. 刪除成員
             this.data.members = this.data.members.filter(m => m.id !== id);
@@ -500,14 +496,13 @@ const app = {
             this.closeModal('editModal');
             this.showToast('成員及相關紀錄已刪除');
         }
-    },
-
-    // --- Leave ---
+    },// js/app.js - Part 3: Leave, Squads, Activity & Export
     toggleLeaveForm() {
         const form = document.getElementById('leaveFormContainer');
         form.classList.toggle('hidden');
         if (!form.classList.contains('hidden')) {
-            document.getElementById('leaveDateInput').valueAsDate = new Date();
+            const dateInput = document.getElementById('leaveDateInput');
+            if(dateInput) dateInput.valueAsDate = new Date();
             this.updateLeaveSubjectSelect();
         }
     },
@@ -675,8 +670,8 @@ const app = {
             this.saveData();
             this.renderLeaveList();
         }
-    },// js/app.js - Part 3
-    // --- Squads ---
+    },
+
     renderSquads() {
         const grid = document.getElementById('squadGrid');
         const term = document.getElementById('groupSearchInput').value.toLowerCase();
@@ -896,7 +891,6 @@ const app = {
         }
     },
 
-    // --- Activities ---
     renderActivities() {
         const container = document.getElementById('activityList');
         const searchTerm = (document.getElementById('activitySearchInput')?.value || '').toLowerCase().trim();
@@ -1032,7 +1026,6 @@ const app = {
         }
     },
 
-    // Winner Selection Logic
     openWinnerSelectionModal() {
         this.showModal('winnerSelectionModal');
         this.renderWinnerMemberSelect();
@@ -1103,7 +1096,6 @@ const app = {
         this.renderWinnerList();
     },
 
-    // --- Utils ---
     getMember(id) { return (this.data.members || []).find(m => m.id === id); },
     
     showModal(id) { document.getElementById(id).classList.remove('hidden'); },
@@ -1126,7 +1118,6 @@ const app = {
         }, 3000);
     },
 
-    // --- Import/Export ---
     exportDataJSON() {
         const blob = new Blob([JSON.stringify(this.data, null, 2)], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
