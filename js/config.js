@@ -1,8 +1,15 @@
 // js/config.js
-// Production v5.5 - 修正語法與變數對應 (window.AppConfig)
+// Production v5.6 - 補回缺失的 COLLECTION_NAMES (修復 TypeError)
 
 window.AppConfig = {
-    // 1. 職業結構 (對應 app.js 的 JOB_STRUCTURE)
+    // 1. 資料庫集合名稱 (原本缺漏這段，導致 app.js 崩潰)
+    COLLECTION_NAMES: {
+        MEMBERS: 'members',
+        GROUPS: 'groups',
+        ACTIVITIES: 'activities'
+    },
+
+    // 2. 職業結構
     JOB_STRUCTURE: {
         "騎士": ["龍", "敏爆", "其他"],
         "十字軍": ["坦", "輸出", "其他"],
@@ -23,7 +30,7 @@ window.AppConfig = {
         "待定": ["待定"]
     },
 
-    // 2. Firebase 設定
+    // 3. Firebase 設定
     FIREBASE_CONFIG: {
         apiKey: "AIzaSyCxVEcgftiu7qmHhgLV-XaLzf6naBhaf-k",
         authDomain: "ro123-aae1e.firebaseapp.com",
@@ -34,7 +41,7 @@ window.AppConfig = {
         measurementId: "G-SVYZGQZB83"
     },
 
-    // 3. 職業樣式 (app.js 顯示顏色必須)
+    // 4. 職業樣式
     JOB_STYLES: [
         { key: ['騎士'], class: 'bg-job-knight', icon: 'fa-shield-alt' },
         { key: ['十字軍'], class: 'bg-job-crusader', icon: 'fa-shield-alt' },
