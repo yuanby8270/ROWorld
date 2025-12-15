@@ -1,5 +1,5 @@
 /* ======================================================
-   styles.css — Final Polished v5.3 (iOS & Safe Area Fix)
+   styles.css — Final Polished v8.0 (Syntax Fixed)
    ====================================================== */
 
 /* 1. Global Reset & Fonts */
@@ -9,14 +9,13 @@ body {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
     -webkit-tap-highlight-color: transparent;
     overflow-x: hidden;
-    /* iOS Safe Area handling */
     padding-top: env(safe-area-inset-top);
     padding-bottom: env(safe-area-inset-bottom);
 }
 
 /* 2. Form Elements Optimization */
 input, select, textarea {
-    font-size: 16px !important; /* Prevents iOS zoom on focus */
+    font-size: 16px !important;
 }
 
 /* 3. Utility: Scroll Hiding & iOS Momentum */
@@ -27,12 +26,11 @@ input, select, textarea {
 .scroll-hide::-webkit-scrollbar {
     display: none;
 }
-/* [重要修正] iOS 滾動慣性修復，讓 Modal 內滾動不卡頓 */
 .overflow-y-auto {
     -webkit-overflow-scrolling: touch;
 }
 
-/* 4. Rendering State (Used in app.js setupRealtimeListener) */
+/* 4. Rendering State */
 body.is-rendering {
     cursor: progress;
     opacity: 0.9;
@@ -56,7 +54,6 @@ body.is-rendering {
     transform: translateY(-1px);
 }
 
-/* Tab Specific Colors */
 #tab-members.active { background-color: #3b82f6; box-shadow: 0 4px 10px -2px rgba(59, 130, 246, 0.3); }
 #tab-gvg.active { background-color: #ef4444; box-shadow: 0 4px 10px -2px rgba(239, 68, 68, 0.3); }
 #tab-leave.active { background-color: #f97316; box-shadow: 0 4px 10px -2px rgba(249, 115, 22, 0.3); }
@@ -77,7 +74,7 @@ body.is-rendering {
     transform: scale(0.99);
 }
 
-/* 7. Floating Action Button (FAB) */
+/* 7. Floating Action Button */
 .fab-btn {
     position: fixed;
     bottom: 24px;
@@ -85,7 +82,6 @@ body.is-rendering {
     z-index: 50;
     box-shadow: 0 10px 20px -5px rgba(0,0,0,0.2);
 }
-/* iOS Safe Area for FAB */
 @supports (padding-bottom: env(safe-area-inset-bottom)) {
     .fab-btn {
         bottom: calc(24px + env(safe-area-inset-bottom));
@@ -110,7 +106,6 @@ body.is-rendering {
     color: #94a3b8;
 }
 
-/* Job Border Colors */
 .border-job-knight, .border-job-騎士 { border-left-color: #ff9999; }
 .border-job-crusader, .border-job-十字軍 { border-left-color: #ff6666; }
 .border-job-blacksmith, .border-job-鐵匠 { border-left-color: #ffcc99; }

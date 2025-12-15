@@ -17,7 +17,7 @@
     
     <script src="https://cdn.tailwindcss.com"></script>
     
-    <link rel="stylesheet" href="css/styles.css">
+    <link rel="stylesheet" href="css/styles.css?v=7.2">
 
     <script>
         tailwind.config = {
@@ -77,7 +77,6 @@
         
         <div id="view-members" class="animate-fade-in hidden">
             <div class="flex justify-between items-center mb-4"><h2 class="text-xl font-bold text-slate-700 flex items-center"><i class="fas fa-users mr-2 text-blue-500"></i>成員名冊</h2><button onclick="app.handleMainAction()" class="bg-slate-800 hover:bg-slate-900 text-white shadow-lg px-4 py-2 rounded-xl font-bold transition text-sm active:scale-95 border-2 border-slate-900 flex items-center"><i class="fas fa-user-plus mr-1"></i> 新增</button></div>
-            
             <div class="bg-white p-4 rounded-2xl shadow-sm border-l-4 border-l-blue-500 border-slate-100 mb-4 flex flex-col gap-3">
                 <div class="flex flex-col md:flex-row gap-3">
                     <div class="relative w-full">
@@ -97,7 +96,6 @@
                     <button onclick="app.setFilter('待定')" class="px-4 py-1.5 rounded-full text-sm font-bold bg-white text-slate-600 border border-slate-200 hover:bg-slate-100 filter-btn transition active:scale-95">待定</button>
                 </div>
             </div>
-
             <div class="flex justify-between text-xs text-slate-400 mb-2 px-2 font-mono font-bold"><span id="memberCount">Total: 0</span><div class="space-x-2"><span>DPS: <span id="stat-dps" class="text-red-500">0</span></span><span>SUP: <span id="stat-sup" class="text-green-500">0</span></span><span>TNK: <span id="stat-tank" class="text-blue-500">0</span></span></div></div>
             <div id="memberGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3"></div>
         </div>
@@ -107,7 +105,6 @@
                 <h2 class="text-xl font-bold text-slate-700 flex items-center"><i class="fas fa-calendar-times mr-2 text-orange-500"></i>請假管理</h2>
                 <button onclick="app.toggleLeaveForm()" class="bg-orange-500 hover:bg-orange-600 text-white shadow-lg px-4 py-2 rounded-xl font-bold transition text-sm active:scale-95 border-2 border-orange-600 flex items-center"><i class="fas fa-plus mr-1"></i> 新增請假</button>
             </div>
-            
             <div id="leaveFormContainer" class="hidden mb-6 bg-white rounded-2xl shadow-lg p-6 border border-orange-100 relative overflow-hidden transition-all">
                 <div class="absolute top-0 right-0 w-24 h-24 bg-orange-50 rounded-full -mr-10 -mt-10 opacity-50 pointer-events-none"></div>
                 <h3 class="font-bold text-slate-700 mb-4 border-b border-orange-100 pb-2">填寫請假單</h3>
@@ -342,3 +339,160 @@
     <script src="js/app.js"></script>
 </body>
 </html>
+}
+
+{
+type: uploaded file
+fileName: styles.css
+fullContent:
+/* ======================================================
+   styles.css — Final Polished v5.3 (iOS & Safe Area Fix)
+   ====================================================== */
+
+/* 1. Global Reset & Fonts */
+body {
+    background-color: #f8fafc;
+    color: #334155;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    -webkit-tap-highlight-color: transparent;
+    overflow-x: hidden;
+    /* iOS Safe Area handling */
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* 2. Form Elements Optimization */
+input, select, textarea {
+    font-size: 16px !important; /* Prevents iOS zoom on focus */
+}
+
+/* 3. Utility: Scroll Hiding & iOS Momentum */
+.scroll-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+}
+.scroll-hide::-webkit-scrollbar {
+    display: none;
+}
+/* [重要修正] iOS 滾動慣性修復，讓 Modal 內滾動不卡頓 */
+.overflow-y-auto {
+    -webkit-overflow-scrolling: touch;
+}
+
+/* 4. Rendering State (Used in app.js setupRealtimeListener) */
+body.is-rendering {
+    cursor: progress;
+    opacity: 0.9;
+    pointer-events: none;
+}
+
+/* 5. Navigation Pills */
+.nav-pill {
+    padding: 8px 16px;
+    font-weight: 700;
+    color: #64748b;
+    border-radius: 20px;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+    font-size: 0.9rem;
+    background: rgba(255, 255, 255, 0.6);
+    border: 1px solid transparent;
+}
+.nav-pill.active {
+    color: #fff;
+    transform: translateY(-1px);
+}
+
+/* Tab Specific Colors */
+#tab-members.active { background-color: #3b82f6; box-shadow: 0 4px 10px -2px rgba(59, 130, 246, 0.3); }
+#tab-gvg.active { background-color: #ef4444; box-shadow: 0 4px 10px -2px rgba(239, 68, 68, 0.3); }
+#tab-leave.active { background-color: #f97316; box-shadow: 0 4px 10px -2px rgba(249, 115, 22, 0.3); }
+#tab-groups.active { background-color: #22c55e; box-shadow: 0 4px 10px -2px rgba(34, 197, 94, 0.3); }
+#tab-activity.active { background-color: #eab308; box-shadow: 0 4px 10px -2px rgba(234, 179, 8, 0.3); }
+#tab-home.active { background-color: #475569; box-shadow: 0 4px 10px -2px rgba(71, 85, 105, 0.3); }
+
+/* 6. Cards & Containers */
+.card, .menu-card, .squad-card, .activity-card {
+    background: #ffffff;
+    border-radius: 16px;
+    border: 1px solid #f1f5f9;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.02);
+    overflow: hidden;
+    transition: transform 0.15s ease;
+}
+.card:active, .menu-card:active {
+    transform: scale(0.99);
+}
+
+/* 7. Floating Action Button (FAB) */
+.fab-btn {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    z-index: 50;
+    box-shadow: 0 10px 20px -5px rgba(0,0,0,0.2);
+}
+/* iOS Safe Area for FAB */
+@supports (padding-bottom: env(safe-area-inset-bottom)) {
+    .fab-btn {
+        bottom: calc(24px + env(safe-area-inset-bottom));
+    }
+}
+
+/* 8. Member Job Styling */
+.member-card {
+    display: flex;
+    align-items: stretch;
+    min-height: 90px;
+    border-left-width: 4px;
+}
+.job-icon-box {
+    width: 56px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.6rem;
+    background-color: #f8fafc;
+    border-right: 1px solid #f1f5f9;
+    color: #94a3b8;
+}
+
+/* Job Border Colors */
+.border-job-knight, .border-job-騎士 { border-left-color: #ff9999; }
+.border-job-crusader, .border-job-十字軍 { border-left-color: #ff6666; }
+.border-job-blacksmith, .border-job-鐵匠 { border-left-color: #ffcc99; }
+.border-job-hunter, .border-job-獵人 { border-left-color: #ffff99; }
+.border-job-bard, .border-job-詩人 { border-left-color: #ffcc00; }
+.border-job-alchemist, .border-job-煉金 { border-left-color: #ff9933; }
+.border-job-priest, .border-job-神官 { border-left-color: #ccffcc; }
+.border-job-monk, .border-job-武僧 { border-left-color: #99cc99; }
+.border-job-wizard, .border-job-巫師 { border-left-color: #ccffff; }
+.border-job-sage, .border-job-賢者 { border-left-color: #66ccff; }
+.border-job-gunslinger, .border-job-槍手 { border-left-color: #ffccff; }
+.border-job-dancer, .border-job-舞孃 { border-left-color: #ff66cc; }
+.border-job-assassin, .border-job-刺客 { border-left-color: #e6ccff; }
+.border-job-rogue, .border-job-流氓 { border-left-color: #b366ff; }
+.border-job-default, .border-job-初心者 { border-left-color: #cbd5e1; }
+.border-job-taiding, .border-job-待定 { border-left-color: #94a3b8; }
+
+/* 9. Tags & Badges */
+.tag { font-size: 0.65rem; padding: 2px 6px; border-radius: 6px; font-weight: 800; }
+.tag-dps { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; }
+.tag-sup { background: #f0fdf4; color: #15803d; border: 1px solid #bbf7d0; }
+.tag-tank { background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; }
+
+/* 10. Admin UI */
+.admin-mode-on {
+    color: #3b82f6 !important;
+    background-color: #eff6ff;
+    border: 1px solid #bfdbfe !important;
+}
+
+/* 11. Animations */
+.animate-fade-in { animation: fadeIn 0.4s ease-out forwards; }
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(5px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+}
+上面固定欄位還是會擋到所有彈出視窗的x關閉鍵
