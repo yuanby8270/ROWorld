@@ -1,4 +1,4 @@
-// js/app.js - v10.2 Masonry Summary Layout & Auto-Fill
+// js/app.js - v10.3 Optimized Export View (Big Text, Compact, Eye-Care)
 
 // 1. 強制檢查 Config
 if (typeof window.AppConfig === 'undefined') {
@@ -787,7 +787,7 @@ const App = {
         this.toggleWinnerSelection(winner.id);
     },
 
-    // [Updated] 匯出總覽圖表 - 支援工作分配分組 & 瀑布流 & 緊湊排版
+    // [New] 匯出總覽圖表功能 - 支援工作分配分組 & 瀑布流 & 緊湊排版
     openSummaryModal: function() {
         const date = this.currentSquadDateFilter;
         const subject = this.currentSquadSubjectFilter;
@@ -809,7 +809,6 @@ const App = {
             return;
         }
 
-        // 1. Group by Assignment
         const grouped = {};
         const sortOrder = ['進攻組', '防守組', '遊走組', '後勤組', '未分配'];
         
@@ -819,7 +818,6 @@ const App = {
             grouped[key].push(g);
         });
 
-        // 2. Sort groups
         const sortedKeys = Object.keys(grouped).sort((a, b) => {
             const idxA = sortOrder.indexOf(a);
             const idxB = sortOrder.indexOf(b);
@@ -829,63 +827,63 @@ const App = {
             return a.localeCompare(b);
         });
 
-        // 3. Update Title
         document.getElementById('summaryTitle').innerText = subject;
         document.getElementById('summaryDate').innerHTML = `<i class="far fa-calendar-alt mr-1"></i>${date}`;
         document.getElementById('summarySubject').innerHTML = `<i class="fas fa-tag mr-1"></i>${subject}`;
 
-        // 4. Render Grid with Masonry Columns
         const grid = document.getElementById('summaryGrid');
         let htmlContent = '';
 
         sortedKeys.forEach(key => {
-            // Masonry Item (Section)
             htmlContent += `
-                <div class="break-inside-avoid-column mb-4 bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden">
-                    <div class="bg-blue-100 text-blue-900 px-3 py-2 font-black text-lg border-b border-blue-200 flex items-center">
+                <div class="break-inside-avoid-column mb-4 bg-slate-50 rounded-lg overflow-hidden border border-slate-200">
+                    <div class="bg-indigo-100 text-indigo-900 px-3 py-2 font-black text-xl border-b border-indigo-200 flex items-center shadow-sm">
                         <i class="fas fa-layer-group mr-2 opacity-50"></i>${key}
                     </div>
                     <div class="p-2 grid grid-cols-2 gap-2">
             `;
 
-            // Render Squads
             grouped[key].forEach((g, index) => {
-                const headerColor = index % 2 === 0 ? 'bg-amber-100 border-amber-200 text-amber-900' : 'bg-emerald-100 border-emerald-200 text-emerald-900';
+                const headerColor = index % 2 === 0 ? 'bg-amber-50 border-amber-100 text-amber-900' : 'bg-emerald-50 border-emerald-100 text-emerald-900';
                 
                 const memberList = (g.members || []).map(m => {
                     const id = typeof m === 'string' ? m : m.id;
                     const mem = this.members.find(x => x.id === id);
                     if (!mem) return '';
                     
+                    const isLeader = g.leaderId === mem.id;
+                    const leaderIcon = isLeader ? '👑' : '';
+                    const leaderClass = isLeader ? 'text-amber-600' : 'text-slate-800';
+
                     let subText = '';
                     if (typeof m === 'object' && m.status === 'leave' && m.subId) {
                         const sub = this.members.find(s => s.id === m.subId);
-                        if (sub) subText = `<span class="text-[10px] text-blue-500 ml-1">(${sub.gameName})</span>`;
+                        if (sub) subText = `<span class="text-xs text-blue-500 font-bold ml-1">(${sub.gameName})</span>`;
                     }
-                    const leaveClass = (typeof m === 'object' && m.status === 'leave') ? 'line-through text-slate-300' : 'text-slate-700';
+                    const leaveClass = (typeof m === 'object' && m.status === 'leave') ? 'line-through text-slate-400 decoration-slate-400' : leaderClass;
 
-                    return `<div class="py-0.5 px-1 border-b border-slate-100 last:border-0 text-xs font-bold text-center ${leaveClass} flex justify-center items-center truncate leading-tight h-[24px]">
-                        ${mem.gameName}${subText}
+                    return `<div class="py-0.5 px-0.5 border-b border-slate-100 last:border-0 text-base font-bold text-center ${leaveClass} flex justify-center items-center truncate leading-tight h-[28px] tracking-wide">
+                        ${leaderIcon} ${mem.gameName}${subText}
                     </div>`;
                 }).join('');
 
                 const emptyRows = 6 - (g.members || []).length;
                 let emptyHtml = '';
-                if (emptyRows > 0) { for(let i=0; i<emptyRows; i++) { emptyHtml += `<div class="py-0.5 px-1 border-b border-slate-100 last:border-0 h-[24px]"></div>`; } }
+                if (emptyRows > 0) { for(let i=0; i<emptyRows; i++) { emptyHtml += `<div class="py-0.5 px-0.5 border-b border-slate-100 last:border-0 h-[28px]"></div>`; } }
 
                 htmlContent += `
-                <div class="bg-white border border-slate-400 flex flex-col shadow-sm">
-                    <div class="${headerColor} py-1 text-center font-black text-sm border-b border-slate-400 tracking-wider truncate px-1">
+                <div class="bg-white border border-slate-300 flex flex-col shadow-sm rounded-sm overflow-hidden">
+                    <div class="${headerColor} py-1 text-center font-black text-lg border-b border-slate-200 tracking-wider truncate px-1">
                         ${g.name}
                     </div>
-                    <div class="divide-y divide-slate-100">
+                    <div class="divide-y divide-slate-50">
                         ${memberList}
                         ${emptyHtml}
                     </div>
                 </div>`;
             });
 
-            htmlContent += `</div></div>`; // Close grid and card wrapper
+            htmlContent += `</div></div>`;
         });
 
         grid.innerHTML = htmlContent;
