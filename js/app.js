@@ -1,5 +1,5 @@
 // js/app.js
-// Production v9.5 - Fix GVG Scrolling (Auto Height) & Force Lights (Inline Styles)
+// Production v9.6 - GVG Export Chart Feature
 
 // 1. 強制檢查 Config
 if (typeof window.AppConfig === 'undefined') {
@@ -310,7 +310,6 @@ const App = {
     cancelLeave: function(groupId, memberId, memberName) { if (!confirm(`確定要取消 ${memberName} 的請假紀錄嗎？`)) return; const group = this.groups.find(g => g.id === groupId); if (!group) return; const idx = group.members.findIndex(m => (typeof m === 'string' ? m : m.id) === memberId); if (idx === -1) return; let m = group.members[idx]; m.status = 'pending'; m.leaveDate = null; m.leaveNote = null; group.members[idx] = m; this.saveGroupUpdate(group); this.logChange('取消請假', `已取消 ${memberName} 在 ${group.name} 的請假`, memberId); this.renderLeaveList(); },
     cancelPreLeave: function(leaveId, memberName) { if (!confirm(`確定要取消 ${memberName} 的預先請假嗎？`)) return; if (this.mode === 'firebase') { this.db.collection('leaves').doc(leaveId).delete().then(() => { this.leaves = this.leaves.filter(l => l.id !== leaveId); this.logChange('取消預假', `已取消 ${memberName} 的預先請假`, 'N/A'); this.renderLeaveList(); }).catch(err => { alert("刪除失敗：" + err); }); } else { this.leaves = this.leaves.filter(l => l.id !== leaveId); this.saveLocal('leaves'); this.logChange('取消預假', `已取消 ${memberName} 的預先請假`, 'N/A'); this.renderLeaveList(); } },
 
-    // ... (名冊、編輯成員相關函式) ...
     renderMembers: function() { const grid = document.getElementById('memberGrid'); const searchVal = document.getElementById('searchInput').value.toLowerCase(); let filtered = this.members.filter(item => { const fullText = (item.lineName + item.gameName + item.mainClass + item.role + (item.intro||"")).toLowerCase(); return fullText.includes(searchVal) && (this.currentFilter === 'all' || item.role.includes(this.currentFilter) || (this.currentFilter === '坦' && item.mainClass.includes('坦'))) && (this.currentJobFilter === 'all' || (item.mainClass||"").startsWith(this.currentJobFilter)); }); document.getElementById('memberCount').innerText = `Total: ${filtered.length}`; ['dps','sup','tank'].forEach(k => document.getElementById('stat-'+k).innerText = this.members.filter(d => d.role.includes(k==='dps'?'輸出':k==='sup'?'輔助':'坦')).length); grid.innerHTML = filtered.map((item, idx) => this.createCardHTML(item, idx)).join(''); },
     createCardHTML: function(item, idx) { const mainJob = item.mainClass ? item.mainClass.split('(')[0] : ''; const style = Cfg.JOB_STYLES.find(s => s.key.some(k => mainJob.includes(k))) || { class: 'bg-job-default', icon: 'fa-user' }; let rankBadge = item.rank === '會長' ? `<span class="rank-badge rank-master">會長</span>` : item.rank === '指揮官' ? `<span class="rank-badge rank-commander">指揮官</span>` : item.rank === '資料管理員' ? `<span class="rank-badge rank-admin">管理</span>` : ''; const memberSquads = this.groups.filter(g => g.members.some(m => (typeof m === 'string' ? m : m.id) === item.id)); const squadBadges = memberSquads.map(s => { const color = s.type === 'gvg' ? 'bg-red-50 text-red-600 border-red-100' : 'bg-green-50 text-green-600 border-green-100'; return `<span class="${color} text-[10px] px-1.5 rounded border truncate inline-block max-w-[80px]">${s.name}</span>`; }).join(''); const getRoleBadge = (r) => r.includes('輸出') ? `<span class="tag tag-dps">${r}</span>` : r.includes('坦') ? `<span class="tag tag-tank">${r}</span>` : r.includes('輔助') ? `<span class="tag tag-sup">${r}</span>` : ''; return `<div class="card member-card border-l-4 ${style.class.replace('bg-', 'border-')}" onclick="app.openEditModal('${item.id}')"><div class="job-icon-box"><i class="fas ${style.icon} opacity-80 group-hover:scale-110 transition"></i></div><div class="flex-grow p-2.5 flex flex-col justify-between min-w-0"><div><div class="flex justify-between items-start pr-6"><div class="flex items-center gap-1 min-w-0">${rankBadge}<h3 class="font-bold text-slate-700 text-base truncate">${item.gameName || '未命名'}</h3></div>${getRoleBadge(item.role)}</div><div class="text-xs font-bold text-slate-400 mt-0.5">${item.mainClass || '未定'}</div></div><div class="flex justify-between items-end mt-1"><div class="flex flex-col gap-1 w-full mr-1"><div class="flex items-center text-[10px] text-slate-400 font-mono bg-white border border-slate-100 rounded px-1.5 py-0.5 w-fit hover:bg-slate-50 copy-tooltip" onclick="event.stopPropagation(); app.copyText(this, '${item.lineName}')"><i class="fab fa-line mr-1 text-green-500"></i> ${item.lineName}</div><div class="tag-area">${squadBadges}</div></div>${item.intro ? `<i class="fas fa-info-circle text-blue-200 hover:text-blue-500" title="${item.intro}"></i>` : ''}</div></div></div>`; },
     setFilter: function(f) { this.currentFilter = f; document.querySelectorAll('.filter-btn').forEach(b => b.className = (b.innerText.includes(f==='all'?'全部':f)||(f==='坦'&&b.innerText.includes('坦克'))||(f==='待定'&&b.innerText.includes('待定'))) ? "px-4 py-1.5 rounded-full text-sm font-bold bg-slate-800 text-white transition whitespace-nowrap filter-btn active shadow-md" : "px-4 py-1.5 rounded-full text-sm font-bold bg-white text-slate-600 border border-slate-200 hover:bg-blue-50 transition whitespace-nowrap filter-btn"); this.renderMembers(); },
@@ -361,8 +360,7 @@ const App = {
         this.logChange('成員刪除', `ID: ${id}`, id); this.closeModal('editModal');
     },
 
-    // 2. 修正 GVG 團體戰版面跑位 (關鍵修改：強制 Tailwind 樣式，不依賴外部 CSS)
-    renderSquads: function() {
+    // ... PART 2 FOLLOWS ...renderSquads: function() {
         const type = this.currentTab === 'gvg' ? 'gvg' : 'groups';
         const search = document.getElementById('groupSearchInput').value.toLowerCase();
         const canEdit = ['master', 'admin', 'commander'].includes(this.userRole);
@@ -384,20 +382,23 @@ const App = {
         const grid = document.getElementById('squadGrid'), emptyMsg = document.getElementById('noSquadsMsg');
         grid.innerHTML = '';
 
-        // [Fix] 強制佔滿整行 (col-span-full) 防止跑版
+        // [New] 加入匯出按鈕的篩選列
         const controlsContainer = document.createElement('div');
-        controlsContainer.className = "col-span-1 lg:col-span-2 flex flex-col md:flex-row gap-3 mb-4 p-1 w-full";
+        controlsContainer.className = "col-span-1 lg:col-span-2 flex flex-col md:flex-row gap-3 mb-4 p-1 w-full items-start md:items-center";
         
         const dateOptions = uniqueDates.map(d => `<option value="${d}" ${this.currentSquadDateFilter === d ? 'selected' : ''}>${d}</option>`).join('');
-        const dateSelectHTML = `<div class="relative min-w-[160px]"><div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400"><i class="far fa-calendar-alt"></i></div><select onchange="app.setSquadDateFilter(this.value)" class="pl-9 pr-4 py-2 w-full bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-700 outline-none focus:ring-2 focus:ring-blue-200 appearance-none shadow-sm cursor-pointer hover:bg-slate-50 transition"><option value="all">所有日期</option>${dateOptions}</select><div class="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none text-slate-400 text-xs"><i class="fas fa-chevron-down"></i></div></div>`;
+        const dateSelectHTML = `<div class="relative min-w-[150px]"><div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400"><i class="far fa-calendar-alt"></i></div><select onchange="app.setSquadDateFilter(this.value)" class="pl-9 pr-4 py-2 w-full bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-700 outline-none focus:ring-2 focus:ring-blue-200 appearance-none shadow-sm cursor-pointer hover:bg-slate-50 transition"><option value="all">所有日期</option>${dateOptions}</select><div class="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none text-slate-400 text-xs"><i class="fas fa-chevron-down"></i></div></div>`;
 
         const subjectOptions = themes.map(t => `<option value="${t}" ${this.currentSquadSubjectFilter === t ? 'selected' : ''}>${t}</option>`).join('');
-        const subjectSelectHTML = `<div class="relative min-w-[160px]"><div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400"><i class="fas fa-tag"></i></div><select onchange="app.setSquadSubjectFilter(this.value)" class="pl-9 pr-4 py-2 w-full bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-700 outline-none focus:ring-2 focus:ring-blue-200 appearance-none shadow-sm cursor-pointer hover:bg-slate-50 transition"><option value="all">所有主題</option>${subjectOptions}</select><div class="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none text-slate-400 text-xs"><i class="fas fa-chevron-down"></i></div></div>`;
+        const subjectSelectHTML = `<div class="relative min-w-[150px]"><div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400"><i class="fas fa-tag"></i></div><select onchange="app.setSquadSubjectFilter(this.value)" class="pl-9 pr-4 py-2 w-full bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-700 outline-none focus:ring-2 focus:ring-blue-200 appearance-none shadow-sm cursor-pointer hover:bg-slate-50 transition"><option value="all">所有主題</option>${subjectOptions}</select><div class="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none text-slate-400 text-xs"><i class="fas fa-chevron-down"></i></div></div>`;
+        
+        // [新增] 匯出按鈕
+        const exportBtnHTML = `<button onclick="app.openSummaryModal()" class="px-4 py-2 bg-slate-800 text-white rounded-xl text-sm font-bold shadow-sm hover:bg-slate-700 transition flex items-center whitespace-nowrap"><i class="fas fa-table mr-2"></i>匯出圖表</button>`;
 
         const filters = [{id: 'all', label: '全部', color: 'bg-slate-800 text-white'}, {id: '輸出', label: '輸出', color: 'bg-red-500 text-white'}, {id: '輔助', label: '輔助', color: 'bg-green-500 text-white'}, {id: '坦', label: '坦克', color: 'bg-blue-500 text-white'}];
-        const roleBtnsHTML = `<div class="flex gap-2 overflow-x-auto pb-1 no-scrollbar flex-grow md:justify-end">` + filters.map(f => { const isActive = this.currentSquadRoleFilter === f.id; const styleClass = isActive ? f.color : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'; return `<button onclick="app.setSquadRoleFilter('${f.id}')" class="px-4 py-2 rounded-xl text-sm font-bold shadow-sm transition whitespace-nowrap active:scale-95 ${styleClass}">${f.label}</button>`; }).join('') + `</div>`;
+        const roleBtnsHTML = `<div class="flex gap-2 overflow-x-auto pb-1 no-scrollbar flex-grow md:justify-end w-full md:w-auto">` + filters.map(f => { const isActive = this.currentSquadRoleFilter === f.id; const styleClass = isActive ? f.color : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'; return `<button onclick="app.setSquadRoleFilter('${f.id}')" class="px-3 py-2 rounded-xl text-xs font-bold shadow-sm transition whitespace-nowrap active:scale-95 ${styleClass}">${f.label}</button>`; }).join('') + `</div>`;
 
-        controlsContainer.innerHTML = dateSelectHTML + subjectSelectHTML + roleBtnsHTML;
+        controlsContainer.innerHTML = dateSelectHTML + subjectSelectHTML + exportBtnHTML + roleBtnsHTML;
         
         if (allGroups.length > 0 || this.currentSquadDateFilter !== 'all' || this.currentSquadSubjectFilter !== 'all') { 
             grid.appendChild(controlsContainer); 
@@ -413,7 +414,6 @@ const App = {
                 if (this.currentSquadRoleFilter !== 'all') { const filterKey = this.currentSquadRoleFilter; const match = m.role.includes(filterKey) || (filterKey === '坦' && m.mainClass.includes('坦')); if (!match) return ''; }
                 const job = (m.mainClass || '').split('(')[0]; 
                 
-                // [Modified] 移除左側邊框顏色，只保留文字顏色識別
                 let roleColor = 'text-slate-400';
                 if (m.role.includes('輸出')) { roleColor = 'text-red-500'; }
                 else if (m.role.includes('坦')) { roleColor = 'text-blue-500'; }
@@ -432,21 +432,15 @@ const App = {
                             subUI = `<select class="sub-select" onchange="app.updateGvgSub('${group.id}', '${m.id}', this.value)" onclick="event.stopPropagation()"><option value="">選擇替補...</option>${options}</select>`; 
                         } else if (m.subId) { const subMem = this.members.find(x => x.id === m.subId); if (subMem) subUI = `<span class="text-blue-500 text-xs mr-2">⇋ ${subMem.gameName}</span>`; }
                     }
-                    
-                    // [GVG Light Fix - FORCE STYLE]
                     const leaveLight = `<div style="width: 12px; height: 12px; border-radius: 50%; border: 2px solid white; box-shadow: 0 1px 2px rgba(0,0,0,0.1); cursor: pointer; background-color: ${m.status === 'leave' ? '#fbbf24' : '#e2e8f0'}" title="請假"></div>`;
                     const statusColor = m.status === 'ready' ? '#22c55e' : '#ef4444';
                     const statusLight = `<div style="width: 12px; height: 12px; border-radius: 50%; border: 2px solid white; box-shadow: 0 1px 2px rgba(0,0,0,0.1); cursor: pointer; background-color: ${statusColor}" title="狀態: ${m.status}" onclick="event.stopPropagation(); app.toggleGvgStatus('${group.id}', '${m.id}', 'ready_toggle')"></div>`;
-                    
                     actionUI = `<div class="flex items-center gap-2">${subUI}${leaveLight}${statusLight}</div>`;
-
                 } else { actionUI = `<span class="text-xs text-slate-300 font-mono">ID:${m.id.slice(-3)}</span>`; }
 
-                // [Modified] 移除 border-l-4 和 borderColor 變數
                 return `<div class="flex items-center justify-between text-sm py-3 border-b border-slate-100 last:border-b-0 hover:bg-slate-50 px-4 transition ${rowClass}"><div class="flex items-center gap-3 min-w-0"><div class="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-xs font-bold ${roleColor}">${m.role.substring(0,1)}</div><div class="flex flex-col min-w-0"><span class="text-slate-800 font-bold truncate member-name">${m.gameName}</span><span class="text-[10px] text-slate-400 font-mono">${job}</span></div></div>${actionUI}</div>`;
             }).join('');
 
-            // [Layout Fix] Remove fixed height constraints from card
             const headerClass = isGVG ? 'bg-red-50 p-4 border-b border-red-100 rounded-t-xl' : 'bg-blue-50 p-4 border-b border-blue-100 rounded-t-xl';
             const cardClass = isGVG ? 'bg-white rounded-xl shadow-md border border-slate-200 border-l-4 border-l-red-500 flex flex-col h-fit' : 'bg-white rounded-xl shadow-sm border border-blue-100 flex flex-col h-fit'; 
             
@@ -568,32 +562,19 @@ const App = {
         this.closeModal('squadModal');
     },
 
-    // 3. Activity 搜尋功能 & 渲染
     renderActivities: function() {
         const list = document.getElementById('activityList'), emptyMsg = document.getElementById('noActivitiesMsg');
-        
         const searchInput = document.getElementById('activitySearchInput');
         const searchTerm = searchInput ? searchInput.value.toLowerCase() : '';
-
         const filteredActivities = this.activities.filter(act => {
             const matchName = act.name.toLowerCase().includes(searchTerm);
-            const matchWinner = (act.winners || []).some(w => {
-                const mem = this.members.find(m => m.id === w.memberId);
-                return mem && mem.gameName.toLowerCase().includes(searchTerm);
-            });
+            const matchWinner = (act.winners || []).some(w => { const mem = this.members.find(m => m.id === w.memberId); return mem && mem.gameName.toLowerCase().includes(searchTerm); });
             return matchName || matchWinner;
         });
-
-        if (!filteredActivities || filteredActivities.length === 0) { 
-            list.innerHTML = ''; 
-            if(emptyMsg) emptyMsg.classList.remove('hidden'); 
-            return; 
-        }
+        if (!filteredActivities || filteredActivities.length === 0) { list.innerHTML = ''; if(emptyMsg) emptyMsg.classList.remove('hidden'); return; }
         if(emptyMsg) emptyMsg.classList.add('hidden');
-
         list.innerHTML = filteredActivities.map(act => {
             const winnersList = (act.winners || []).map((w, idx) => { const mem = this.members.find(m => m.id === w.memberId); const name = mem ? mem.gameName : 'Unknown'; const job = mem ? mem.mainClass : '-'; let timeStr = ""; if(w.claimedAt) { const d = new Date(w.claimedAt); timeStr = `${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`; } const isMaster = ['master', 'admin'].includes(this.userRole); const clickAction = (isMaster && !w.claimed) ? `onclick="app.handleClaimReward('${act.id}', ${idx})"` : ''; const titleText = w.claimed ? `已於 ${timeStr} 領取` : (isMaster ? '點擊發放獎勵 (立即紀錄)' : '未領取'); 
-            // [Activity Light Fix]
             const lightColor = w.claimed ? '#22c55e' : '#e2e8f0';
             return `<div class="flex justify-between items-center py-3 border-b border-slate-100 last:border-0"><div class="flex flex-col"><span class="font-bold text-slate-700 text-sm">${name}</span><span class="text-xs text-slate-400">${job}</span>${w.claimed ? `<span class="text-[10px] text-green-600 font-mono mt-1">${timeStr} 已領</span>` : ''}</div><div style="width:12px; height:12px; border-radius:50%; background-color:${lightColor}; cursor:pointer;" ${clickAction} title="${titleText}"></div></div>`; }).join('');
             return `<div class="bg-white rounded-xl border border-yellow-200 shadow-sm overflow-hidden flex flex-col"><div class="bg-gradient-to-r from-orange-100 to-yellow-50 p-4 border-b border-yellow-200 flex justify-between items-start"><div><h3 class="font-bold text-lg text-slate-800">${act.name}</h3><p class="text-xs text-yellow-800 font-bold mt-1 bg-yellow-200 px-2 py-1 rounded inline-block">${act.note || '總獎勵詳見備註'}</p></div>${['master', 'admin'].includes(this.userRole) ? `<button onclick="app.openActivityModal('${act.id}')" class="text-slate-400 hover:text-blue-500"><i class="fas fa-edit"></i></button>` : ''}</div><div class="p-4 bg-white flex-grow">${winnersList.length ? winnersList : '<p class="text-center text-slate-400 text-sm py-4">名單確認中...</p>'}</div></div>`;
@@ -741,6 +722,84 @@ const App = {
         const winner = candidates[Math.floor(Math.random() * candidates.length)];
         alert(`🎉 恭喜中獎：${winner.gameName}！`);
         this.toggleWinnerSelection(winner.id);
+    },
+
+    // [New] 匯出總覽圖表功能
+    openSummaryModal: function() {
+        const date = this.currentSquadDateFilter;
+        const subject = this.currentSquadSubjectFilter;
+        const type = this.currentTab === 'gvg' ? 'gvg' : 'groups';
+
+        // 1. 檢查是否已篩選
+        if (date === 'all' || subject === 'all') {
+            alert("請先篩選出特定的「日期」與「主題」，才能產生圖表。");
+            return;
+        }
+
+        // 2. 取得要顯示的隊伍
+        let targetGroups = this.groups.filter(g => 
+            (g.type || 'gvg') === type && 
+            g.date === date && 
+            (g.subject || 'GVG 攻城戰') === subject
+        );
+
+        if (targetGroups.length === 0) {
+            alert("該日期與主題下沒有隊伍。");
+            return;
+        }
+
+        // 3. 更新標題
+        document.getElementById('summaryDate').innerHTML = `<i class="far fa-calendar-alt mr-1"></i>${date}`;
+        document.getElementById('summarySubject').innerHTML = `<i class="fas fa-tag mr-1"></i>${subject}`;
+
+        // 4. 產生類似 Excel 的緊湊表格
+        const grid = document.getElementById('summaryGrid');
+        grid.innerHTML = targetGroups.map((g, index) => {
+            // 標題顏色交替 (模仿你提供的圖片：黃色、綠色交替)
+            const headerColor = index % 2 === 0 ? 'bg-amber-100 border-amber-200 text-amber-900' : 'bg-emerald-100 border-emerald-200 text-emerald-900';
+            
+            // 成員列表
+            const memberList = (g.members || []).map(m => {
+                const id = typeof m === 'string' ? m : m.id;
+                const mem = this.members.find(x => x.id === id);
+                if (!mem) return '';
+                
+                // 處理替補顯示
+                let subText = '';
+                if (typeof m === 'object' && m.status === 'leave' && m.subId) {
+                    const sub = this.members.find(s => s.id === m.subId);
+                    if (sub) subText = `<span class="text-[10px] text-blue-500 ml-1">(${sub.gameName})</span>`;
+                }
+                // 請假標示
+                const leaveClass = (typeof m === 'object' && m.status === 'leave') ? 'line-through text-slate-300' : 'text-slate-700';
+
+                return `<div class="py-1 px-2 border-b border-slate-100 last:border-0 text-sm font-bold text-center ${leaveClass} flex justify-center items-center">
+                    ${mem.gameName}${subText}
+                </div>`;
+            }).join('');
+
+            // 補滿空行 (為了美觀，如果人少的話)
+            const emptyRows = 6 - (g.members || []).length; // 假設一隊最多6人
+            let emptyHtml = '';
+            if (emptyRows > 0) {
+                for(let i=0; i<emptyRows; i++) {
+                    emptyHtml += `<div class="py-1 px-2 border-b border-slate-100 last:border-0 h-[29px]"></div>`;
+                }
+            }
+
+            return `
+            <div class="bg-white border-2 border-slate-800 flex flex-col shadow-sm">
+                <div class="${headerColor} py-2 text-center font-black text-lg border-b-2 border-slate-800 tracking-wider">
+                    ${g.name}
+                </div>
+                <div class="divide-y divide-slate-100">
+                    ${memberList}
+                    ${emptyHtml}
+                </div>
+            </div>`;
+        }).join('');
+
+        app.showModal('summaryModal');
     }
 };
 
