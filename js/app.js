@@ -1,4 +1,4 @@
-// js/app.js - v10.1 Squad Name Automation & Compact Export
+// js/app.js - v10.2 Masonry Summary Layout & Auto-Fill
 
 // 1. 強制檢查 Config
 if (typeof window.AppConfig === 'undefined') {
@@ -787,7 +787,7 @@ const App = {
         this.toggleWinnerSelection(winner.id);
     },
 
-    // [New] 匯出總覽圖表功能 - 支援工作分配分組 & 緊湊排版
+    // [Updated] 匯出總覽圖表 - 支援工作分配分組 & 瀑布流 & 緊湊排版
     openSummaryModal: function() {
         const date = this.currentSquadDateFilter;
         const subject = this.currentSquadSubjectFilter;
@@ -819,7 +819,7 @@ const App = {
             grouped[key].push(g);
         });
 
-        // 2. Sort groups (Predefined -> Custom)
+        // 2. Sort groups
         const sortedKeys = Object.keys(grouped).sort((a, b) => {
             const idxA = sortOrder.indexOf(a);
             const idxB = sortOrder.indexOf(b);
@@ -834,19 +834,18 @@ const App = {
         document.getElementById('summaryDate').innerHTML = `<i class="far fa-calendar-alt mr-1"></i>${date}`;
         document.getElementById('summarySubject').innerHTML = `<i class="fas fa-tag mr-1"></i>${subject}`;
 
-        // 4. Render Grid
+        // 4. Render Grid with Masonry Columns
         const grid = document.getElementById('summaryGrid');
-        grid.className = "flex flex-col gap-4"; // Override grid to flex column for sections
         let htmlContent = '';
 
         sortedKeys.forEach(key => {
-            // Section Header
+            // Masonry Item (Section)
             htmlContent += `
-                <div class="w-full">
-                    <div class="bg-blue-100 text-blue-900 border-l-4 border-blue-500 py-1 px-2 font-black text-lg rounded shadow-sm mb-2 inline-block">
-                        ${key}
+                <div class="break-inside-avoid-column mb-4 bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden">
+                    <div class="bg-blue-100 text-blue-900 px-3 py-2 font-black text-lg border-b border-blue-200 flex items-center">
+                        <i class="fas fa-layer-group mr-2 opacity-50"></i>${key}
                     </div>
-                    <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2">
+                    <div class="p-2 grid grid-cols-2 gap-2">
             `;
 
             // Render Squads
@@ -886,7 +885,7 @@ const App = {
                 </div>`;
             });
 
-            htmlContent += `</div></div>`; // Close grid and wrapper
+            htmlContent += `</div></div>`; // Close grid and card wrapper
         });
 
         grid.innerHTML = htmlContent;
